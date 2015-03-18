@@ -6,4 +6,4 @@
 
   * [Some Sublink]()
 
-[Forums](https://forums.hak5.org/)
+[Forums](https://forums.hak5.org/index.php?/forum/88-lan-turtle/)
