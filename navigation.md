@@ -2,6 +2,7 @@
 
 [Home](index.md)
 
-[Some toplink]()
+[Resources]()
+  * [Some Sublink]()
 
-  * [Some Link]()
+[Forums](https://forums.hak5.org/)
