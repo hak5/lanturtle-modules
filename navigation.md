@@ -1,4 +1,4 @@
-# WiFi Pineapple Wiki
+# Hak5 Lan Turtle Wiki
 
 [Home](index.md)
 
