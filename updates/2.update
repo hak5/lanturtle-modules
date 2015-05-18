@@ -1,3 +1,5 @@
+echo -e "Starting v2 update test\n"
 touch /tmp/the_OTA_worked
 touch /tmp/This_also_worked
 uptime &> /tmp/uptime.OTA
+echo -e "Done.\n"
