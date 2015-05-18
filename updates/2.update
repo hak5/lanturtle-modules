@@ -1,0 +1,3 @@
+touch /tmp/the_OTA_worked
+touch /tmp/This_also_worked
+uptime &> /tmp/uptime.OTA
