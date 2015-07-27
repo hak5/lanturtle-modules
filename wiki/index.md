@@ -9,7 +9,7 @@ Housed within a generic "USB Ethernet Adapter" case, the LAN Turtle’s covert a
 ---
 
 ##Purchase
-* The USB Rubber Ducky is available from [The HakShop](http://www.hakshop.com/lanturtle).
+* The Hak5 LAN Turtle is available from [The HakShop](http://www.hakshop.com/lanturtle).
 
 ---
 
