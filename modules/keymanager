@@ -1,0 +1,159 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+VERSION="1.1"
+DESCRIPTION="SSH Key Manager"
+EXECUTABLE="0"
+CONF=/tmp/keymanager.form
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ITEM_HELP=4}
+: ${DIALOG_ESC=255}
+
+
+
+function generate_key {
+  dialog --title "Generate New SSH Key Pair?" \
+  --yesno "\nGenerate New SSH Key Pair?\n\n\
+This will replace the existing key pair in /root/.ssh/\n\n\
+Note: SSH sessions relying on this key pair will not authenticate until the new public key is copied to the\nremote server." \
+13 60 2>$CONF
+
+case $? in
+  0) 
+    rm -rf /root/.ssh/id_rsa*
+    ssh-keygen -N "" -f /root/.ssh/id_rsa | dialog --programbox "Generating Key Pair (This will take a minute)" 20 60
+    dialog --title "Notice" --msgbox "SSH Key Pair Generated" 5 60
+    configure
+    ;;
+  1) configure ;;
+esac
+}
+
+
+
+
+
+function copy_key {
+  dialog --ok-label "Submit" \
+    --title "SSH Copy ID" \
+    --form "SSH Copy ID is a convient script which will copy the local SSH public key to a remote server.\n \n\
+Host: Remote SSH Server.\n\
+Port: Remote SSH Server Port (Typically 22).\n\
+User: User on remote SSH server.\n \n" 17 60 3\
+    "Host:"     	1 1     "$copy_host"   1 10 48 0 \
+    "Port:"     	2 1     "$copy_port"   2 10 48 0 \
+    "User:"     	3 1     "$copy_user"   3 10 48 0 \
+  2>$CONF
+  return=$?
+
+  case $return in
+    0)
+      cat $CONF | {
+        read -r copy_host
+        read -r copy_port
+        read -r copy_user
+        read -r copy_pass
+
+
+
+        if [ -z "$copy_host" ]; then
+          dialog --title "Notice" --msgbox "Host Required" 5 60; copy_key
+        fi
+        if [ -z "$copy_port" ]; then
+          copy_port="22"
+        fi
+        if [ -z "$copy_user" ]; then
+          dialog --title "Notice" --msgbox "User Required" 5 60; copy_key
+        fi
+        touch /root/.ssh/known_hosts
+        if ! grep -q $copy_host /root/.ssh/known_hosts; then
+          dialog --title "Notice" --msgbox "Cannot find $copy_host in known_hosts. Adding it now." 6 60
+          ssh-keyscan -p "$copy_port" "$copy_host" 2>/dev/null > /tmp/tmp_hosts
+          cat /tmp/tmp_hosts >> /root/.ssh/known_hosts
+          NEWHOST=$(cat /tmp/tmp_hosts)
+          if [[ -s /tmp/tmp_hosts ]]; then
+            dialog --title "Notice" --msgbox "Added the following to /root/.ssh/known_hosts:\n\n$NEWHOST" 18 60
+          else
+            dialog --title "Notice" --msgbox "There was an error retrieving the key fingerprint" 8 60
+            copy_key
+          fi;
+          rm /tmp/tmp_hosts
+        fi
+
+        rm /tmp/empty_* &>/dev/null
+        ssh-copy-id -i /root/.ssh/id_rsa.pub -p "$copy_port" "$copy_user"@"$copy_host"
+        configure
+      };;
+    1) configure;;
+    255) configure;;
+  esac 
+}
+
+
+
+
+
+
+function add_host {
+  dialog --ok-label "Submit" \
+    --title "Add Remote Server to Known Hosts List" \
+    --form "This utility will add the remote SSH servers key fingerprint to the local known hosts file.\n \n\
+Host: Remote SSH Server.\n\
+Port: Remote SSH Server Port (Typically 22).\n \n" 14 60 2\
+    "Host:"     1 1     "$add_host"   1 7 48 0 \
+    "Port:"     2 1     "$add_port"   2 7 48 0 \
+  2>$CONF
+  return=$?
+
+  case $return in
+    0)
+      cat $CONF | {
+        read -r add_host
+        read -r add_port
+        if [ -z "$add_port" ]; then
+          add_port="22"
+        fi
+        ssh-keyscan -p "$add_port" "$add_host" > /tmp/tmp_hosts 
+        cat /tmp/tmp_hosts >> /root/.ssh/known_hosts
+        NEWHOST=`cat /tmp/tmp_hosts`
+        if [[ -s /tmp/tmp_hosts ]]; then
+          dialog --title "Notice" --msgbox "Added the following to /root/.ssh/known_hosts:\n\n$NEWHOST" 18 60
+        else
+          dialog --title "Notice" --msgbox "There was an error retrieving the key fingerprint" 8 60
+        fi;
+        rm /tmp/tmp_hosts
+        configure
+      };;
+    1) configure;;
+    255) configure;;
+  esac
+}
+
+function review {
+  touch /root/.ssh/known_hosts
+  dialog --title "/root/.ssh/known_hosts" \
+    --editbox /root/.ssh/known_hosts 18 72\
+  2>/dev/null
+  configure
+}
+
+function configure {
+  dialog --title "" --menu "" 15 60 5 \
+    "generate_key"	"Generate new SSH key pair" \
+    "copy_key"		"Copy public key to remote host" \
+    "add_host"		"Add Remote host to local known_hosts" \
+    "review"            "Review local known_hosts" \
+    "back"		"Back" 2> $CONF
+  result=$(cat $CONF && rm $CONF &>/dev/null)
+  case $result in
+    "generate_key") generate_key;;
+    "copy_key") copy_key;;
+    "add_host") add_host;;
+    "review") review;;
+    "back") exit;;
+  esac
+}
+
+

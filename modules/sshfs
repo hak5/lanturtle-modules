@@ -1,0 +1,107 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+
+VERSION="1.0"
+DESCRIPTION="Mounts remote File Systems over SSH"
+CONF=/tmp/sshfs.form
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ITEM_HELP=4}
+: ${DIALOG_ESC=255}
+
+function start {
+  if [ -s /etc/config/sshfs ]
+  then
+    sshfs_host=$(uci get sshfs.host)
+    sshfs_port=$(uci get sshfs.port)
+    sshfs_user=$(uci get sshfs.user)
+    sshfs_path=$(uci get sshfs.path)
+    echo sshfs -o idmap=user -C -p "$sshfs_port" "$sshfs_user"@"$sshfs_host":"$sshfs_path" /sshfs/
+    sshfs -o idmap=user -C -p "$sshfs_port" "$sshfs_user"@"$sshfs_host":"$sshfs_path" /sshfs/
+    echo -n "sshfs started with pid: "; pidof sshfs
+  else
+    touch /etc/config/sshfs
+    echo "sshfs not configured"
+  fi
+}
+
+function stop {
+  fusermount -u /sshfs/
+}
+
+function status {
+  if pgrep sshfs > /dev/null; then echo "1"; else echo "0"; fi
+}
+
+function configure {
+  mkdir -p /sshfs/
+  if [ -s /etc/config/sshfs ]
+  then
+    sshfs_host=$(uci get sshfs.host)
+    sshfs_port=$(uci get sshfs.port)
+    sshfs_user=$(uci get sshfs.user)
+    sshfs_path=$(uci get sshfs.path)
+  else
+    touch /etc/config/sshfs
+  fi
+
+  dialog --ok-label "Submit" \
+    --help-button \
+    --title "SSHFS Configuration" \
+    --form "SSHFS (Secure SHell FileSystem)\n\n\
+Host: Remote SSH Server.\n\
+Port: Remote SSH Server Port (Default: 22).\n\
+User: User on remote SSH server.\n\
+Path: Path on remote SSH server (blank for users home).\n" 16 60 4\
+    "Host:"	1 1	"$sshfs_host"	1 7 48 0 \
+    "Port:"	2 1	"$sshfs_port"	2 7 48 0 \
+    "User:"	3 1	"$sshfs_user"	3 7 48 0 \
+    "Path:"	4 1	"$sshfs_path"	4 7 48 0 \
+  2>$CONF
+
+  return=$?
+
+  case $return in
+    $DIALOG_OK)
+      cat $CONF | { 
+        read -r sshfs_host
+        read -r sshfs_port
+        read -r sshfs_user
+        read -r sshfs_path
+        if [ -z "$sshfs_port" ]; then
+          sshfs_port="22"
+        fi
+        touch /etc/config/sshfs
+        uci set sshfs.host="$sshfs_host"
+        uci set sshfs.port="$sshfs_port"
+        uci set sshfs.user="$sshfs_user"
+        uci set sshfs.path="$sshfs_path"
+        uci commit sshfs
+        rm $CONF
+        clear
+      };;
+    $DIALOG_CANCEL)
+      rm $CONF
+      clear
+      exit;;
+    $DIALOG_HELP)
+      dialog --title "Help" \
+        --msgbox "sshfs \
+SSHFS (Secure SHell FileSystem) is a file system for Linux (and other operating systems with a \
+FUSE implementation, such as Mac OS X or FreeBSD) capable of operating on files on a remote \
+computer using just a secure shell login on the remote computer. On the local computer where \
+the SSHFS is mounted, the implementation makes use of the FUSE (Filesystem in Userspace) kernel \
+module. The practical effect of this is that the end user can seamlessly interact with \
+remote files being securely served over SSH just as if they were local files on his/her \
+computer. On the remote computer the SFTP subsystem of SSH is used.\n\n\
+If host is a numeric IPv6 address, it needs to be enclosed in square brackets\
+" 20 60
+      configure
+      ;;
+    $DIALOG_ESC)
+      clear;;
+  esac
+}
+

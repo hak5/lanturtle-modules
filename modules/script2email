@@ -1,0 +1,151 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+VERSION="1.0"
+DESCRIPTION="Email script output via SMTP"
+CONF=/tmp/smtpemail.form
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ITEM_HELP=4}
+: ${DIALOG_ESC=255}
+
+function start {
+  if [ -s /etc/config/smtpemail ]
+  then
+    smtpemail_to=$(uci get smtpemail.to)
+    /bin/bash /etc/turtle/smtpemail/script.sh > /tmp/smtpemail_output
+    ssmtp $smtpemail_to < /tmp/smtpemail_output
+    echo "Email sent to $smtpemail_to"
+  else
+    touch /etc/config/smtpemail
+    echo "smtpemail not configured"
+  fi
+}
+
+function stop {
+  echo stop>>/dev/null
+}
+
+function status {
+  echo 0
+}
+
+function configure {
+  mkdir -p /etc/turtle/smtpemail/
+  if [ -s /etc/config/smtpemail ]
+  then
+    smtpemail_from=$(uci get smtpemail.from)
+    smtpemail_to=$(uci get smtpemail.to)
+    smtpemail_mailhub=$(uci get smtpemail.mailhub)
+    smtpemail_rewriteDomain=$(uci get smtpemail.rewriteDomain)
+    smtpemail_hostname=$(uci get smtpemail.hostname)
+    smtpemail_AuthUser=$(uci get smtpemail.AuthUser)
+    smtpemail_AuthPass=$(uci get smtpemail.AuthPass)
+  else
+    touch /etc/config/smtpemail
+  fi
+
+  dialog --ok-label "Submit" \
+    --extra-button \
+    --extra-label "Edit Script" \
+    --help-button \
+    --title "Script to Email Configuration" \
+    --form "\n\
+Email the script output using the following SMTP settings:.\n \n\n" 17 60 7\
+    "From:"		1 1	"$smtpemail_from"		1 12 200 0 \
+    "To:"		2 1	"$smtpemail_to"			2 12 200 0 \
+    "SMTP:"		3 1	"$smtpemail_mailhub"		3 12 200 0 \
+    "Domain:"		4 1	"$smtpemail_rewriteDomain"	4 12 200 0 \
+    "Hostname:"		5 1	"$smtpemail_hostname"		5 12 200 0 \
+    "Username:"		6 1	"$smtpemail_AuthUser"		6 12 200 0 \
+    "Password:"		7 1	"$smtpemail_AuthPass"		7 12 200 0 \
+  2>$CONF
+
+  return=$?
+
+  case $return in
+    $DIALOG_OK)
+      cat $CONF | { 
+        read -r smtpemail_from
+        read -r smtpemail_to
+        read -r smtpemail_mailhub
+        read -r smtpemail_rewriteDomain
+        read -r smtpemail_hostname
+        read -r smtpemail_AuthUser
+        read -r smtpemail_AuthPass
+        touch /etc/config/smtpemail
+        uci set smtpemail.from="$smtpemail_from"
+        uci set smtpemail.to="$smtpemail_to"
+        uci set smtpemail.mailhub="$smtpemail_mailhub"
+        uci set smtpemail.rewriteDomain="$smtpemail_rewriteDomain"
+        uci set smtpemail.hostname="$smtpemail_hostname"
+        uci set smtpemail.AuthUser="$smtpemail_AuthUser"
+        uci set smtpemail.AuthPass="$smtpemail_AuthPass"
+        uci commit smtpemail
+        echo -e "root=$smtpemail_from
+mailhub=$smtpemail_mailhub
+rewriteDomain=$smtpemail_rewriteDomain
+hostname=$smtpemail_hostname
+FromLineOverride=YES
+UseTLS=YES
+USESTARTTLS=YES
+AuthUser=$smtpemail_AuthUser
+AuthPass=$smtpemail_AuthPass" > /etc/ssmtp/ssmtp.conf
+        rm $CONF
+        clear
+      };;
+    $DIALOG_CANCEL)
+      rm $CONF
+      clear
+      exit;;
+    $DIALOG_HELP)
+      dialog --title "Help" \
+        --msgbox "\
+This module sends the output of the script as an email to the specified address.\n \n\
+Example configuration using Gmail*\n \n\
+From: ACCOUNT@gmail.com\n\
+To: Recipient@Example.com\n\
+SMTP: smtp.gmail.com:587\n\
+Domain: gmail.com\n\
+Hostname: ACCOUNT@gmail.com:587\n\
+Username: ACCOUNT@gmail.com\n\
+Password: GMAIL_PASSWORD\n \n\
+*Google restricts Gmail accounts to 500 messages sent by their SMTP servers per day.\
+" 20 60
+      configure
+      ;;
+    $DIALOG_EXTRA)
+      if [ ! -e /etc/turtle/smtpemail/script.sh ]; then
+        touch /etc/turtle/smtpemail/script.sh
+        echo -e "\
+# The output of this script will be sent by email by script2email \n\
+# Example: ifconfig | grep inet\n\
+" > /etc/turtle/smtpemail/script.sh
+      fi
+      dialog \
+        --title "SMTP Email Script: /etc/turtle/smtpemail/script.sh" \
+        --editbox /etc/turtle/smtpemail/script.sh 18 72\
+      2>$CONF
+      return=$?
+      case $return in
+        $DIALOG_OK)
+          cat $CONF | {
+            cat $CONF > /etc/turtle/smtpemail/script.sh
+            rm $CONF
+            clear
+            configure
+          };;
+        $DIALOG_CANCEL)
+          rm $CONF
+          clear
+          configure;;
+        $DIALOG_ESC)
+          clear
+          configure;;
+      esac
+    ;;
+    $DIALOG_ESC)
+      clear;;
+  esac
+}

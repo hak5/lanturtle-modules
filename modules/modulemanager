@@ -1,0 +1,138 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+VERSION="1.0"
+DESCRIPTION="Module Manager"
+EXECUTABLE="0"
+CONF=/tmp/modulemanager.form
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ITEM_HELP=4}
+: ${DIALOG_ESC=255}
+
+function delete_modules {
+    modlist=""
+    n=1
+    ls -1 /etc/turtle/modules/ > /tmp/installed_mods
+    while read mod;
+    do
+            modlist="$modlist $mod $n off"
+            n=$[n+1]
+    done < /tmp/installed_mods
+
+    choices=$(dialog --stdout --checklist 'Choose item:' 18 72 20 $modlist)
+
+    if [ $? -eq 0 ]
+    then
+        dialog --yesno "Are you sure you want to delete modules:\n $choices" 8 60
+        response=$?
+        case $response in
+            0) 
+            for choice in $choices
+            do
+                rm /etc/turtle/modules/$choice
+            done
+            dialog --title "Notice" --msgbox "Modules deleted." 5 60
+            configure
+            ;;
+           1) configure;;
+           255) configure;;
+        esac
+    else
+        configure
+    fi
+}
+
+function update_modules {
+    BASE_URL='http://lanturtle.com/modules'
+    dialog --yesno "Are you sure you want to connect to LANTurtle.com and update all installed modules?" 6 60
+    response=$?
+    case $response in
+        0)
+            for module in /etc/turtle/modules/*
+            do
+                module=$(echo $module | awk -F '/' '{print $5}')
+                wget -q $BASE_URL/$module -O /etc/turtle/modules/$module
+                chmod +x /etc/turtle/modules/$module
+            done
+            dialog --title "Notice" --msgbox "Modules updated" 5 60
+            configure
+        ;;
+       1) configure;;
+       255) configure;;
+    esac
+}
+
+
+function module_directory {
+dialog --yesno "Are you sure you want to connect to LANTurtle.com?" 6 60
+response=$?
+case $response in
+    0) 
+    BASE_URL='http://lanturtle.com/modules'
+    wget -q $BASE_URL/module_list -O /tmp/module_list
+
+    pkglist=""
+    while read pkg;
+    do
+        pkg_name=$(echo $pkg | awk '{print $1}')
+        pkg_desc="$(echo $pkg | sed 's/^[^ ][^ ]* //')"
+
+        if [ ! -f /etc/turtle/modules/$pkg_name  ]
+            then
+            pkglist="$pkglist $pkg_name '"$pkg_desc"' off"
+        fi
+    done < /tmp/module_list
+
+    if [ -z $pkglist ]; then
+        dialog --msgbox "No modules available" 6 60
+        configure
+    fi
+
+    install_modules=$(eval "dialog --stdout --checklist 'Available Modules:' 18 72 20 $pkglist")
+
+    if [ $? -eq 0 ]
+        then
+        for module in $install_modules
+        do
+            module=$(echo $module | awk '{print $1}')
+            wget -qO- $BASE_URL/$module > /etc/turtle/modules/$module
+            chmod +x /etc/turtle/modules/$module
+            echo $module >> /tmp/installed_modules
+        done
+        message=$(cat /tmp/installed_modules)
+        dialog --msgbox "Installed Modules:\n $message" 8 60
+        rm /tmp/installed_modules
+        configure
+    else
+        configure
+    fi
+    ;;
+   1) configure;;
+   255) configure;;
+esac
+}
+
+function configure {
+dialog --title "Module Manager" --menu "" 15 60 4 \
+    "Directory" "Download modules from LANTurtle.com" \
+    "Delete"    "Delete installed modules" \
+    "Update"    "Update installed modules" \
+    "Back"      "Return to Previous Menu" 2> /tmp/directory.out
+result=$(cat /tmp/directory.out && rm /tmp/directory.out &>/dev/null)
+    case $result in
+        "Directory")
+            module_directory
+        ;;
+        "Delete")
+            delete_modules
+        ;;
+        "Update")
+            update_modules
+        ;;
+        "Back")
+            exit
+        ;;
+    esac
+}

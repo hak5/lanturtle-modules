@@ -1,0 +1,120 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+VERSION="1.1"
+DESCRIPTION="URL Snarf sniffs HTTP traffic"
+CONF=/tmp/urlsnarf.form
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ITEM_HELP=4}
+: ${DIALOG_ESC=255}
+
+function start {
+  DATE=$(date +"%Y-%m-%d_%H-%M")
+  if [ -s /etc/config/urlsnarf ]
+  then
+    urlsnarf_log=$(uci get urlsnarf.log)
+    case $urlsnarf_log in
+      sshfs)
+        if pgrep sshfs > /dev/null; then 
+          echo "SSHFS Running"
+          echo "urlsnarf -n -i br-lan >> /sshfs/urlsnarf_$DATE.log" | at now
+          echo urlsnarf started with pid $(pidof urlsnarf)
+        else 
+          echo "SSHFS not running"
+        fi
+        ;;
+      tmp)
+        echo "urlsnarf -n -i br-lan > /tmp/urlsnarf_$DATE.log" | at now
+        echo urlsnarf started with pid $(pidof urlsnarf)
+        ;;
+      none)
+        echo "urlsnarf -n -i br-lan" | at now
+        echo urlsnarf started with pid $(pidof urlsnarf)
+        ;;
+    esac
+  else
+    echo "URLSnarf not configured."
+  fi
+}
+
+function stop {
+  echo "Killing URLSnarf at PID:"
+  pidof urlsnarf
+  kill $(pidof urlsnarf)
+}
+
+function status {
+  if pgrep urlsnarf > /dev/null; then echo "1"; else echo "0"; fi
+}
+
+function configure {
+  if [ -s /etc/config/urlsnarf ]
+  then
+    urlsanrf_log=$(uci get urlsnarf.log)
+  else
+    touch /etc/config/urlsnarf
+  fi
+
+  dialog --ok-label "Submit" \
+    --extra-button \
+    --extra-label "Test" \
+    --help-button \
+    --title "URLSnarf Configuration" \
+    --radiolist "\n\
+urlsnarf outputs all requested URLs sniffed from HTTP traffic in CLF (Common Log Format, used by most web servers), suitable for offline post-processing with web log analysis tool (analog, wwwstat, etc.)...\n\nUse [Space] to select choice.\n" 16 60 3\
+    1 "Save log to SSHFS if available." off\
+    2 "Save log to /tmp/" off\
+    3 "Do not save log file." on\
+  2>$CONF
+
+  return=$?
+
+  case $return in
+    $DIALOG_OK)
+      LOG=$(cat $CONF)
+      case $LOG in
+        1)
+          uci set urlsnarf.log="sshfs"
+          uci commit urlsnarf
+          ;;
+        2)
+          uci set urlsnarf.log="tmp"
+          uci commit urlsnarf
+          ;;
+        3)
+          uci set urlsnarf.log="none"
+          uci commit urlsnarf
+          ;;
+      esac
+    ;;
+    $DIALOG_CANCEL)
+      rm $CONF
+      clear
+      exit;;
+    $DIALOG_HELP)
+      dialog --title "Help" \
+        --msgbox "\
+Using URLSnarf, one may monitor the HTTP (web) activity on passing through the LAN Turtle.\n\n\
+The default configuration monitors TCP ports 80, 8080 and 3128 (Squid) with IP hostname resolution disabled.\n\n\
+Activity may be logged either locally in /tmp/ (which is memory limited), or to a remote file system using the SSHFS module.\n\n\
+Logs will be saved in the CLF (Common Log Format) used by most web servers for further analysis with tools such as analog or wwwstat.\n\n\
+Log filenames are datestamped.\
+" 20 60
+      configure
+      ;;
+    $DIALOG_EXTRA)
+      urlsnarf -n -i br-lan > /tmp/urlsnarf.log &
+      dialog \
+        --title "URL Snarf (keys 'h' and 'l' scroll)" \
+        --tailbox /tmp/urlsnarf.log 18 72\
+      2>$CONF
+      kill $(pidof urlsnarf)
+      rm /tmp/urlsnarf.log
+      configure
+    ;;
+    $DIALOG_ESC)
+      clear;;
+  esac
+}

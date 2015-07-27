@@ -1,0 +1,86 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+
+VERSION="1.1"
+DESCRIPTION="AutoSSH maintains persistent secure shells"
+CONF=/tmp/autossh.form
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ITEM_HELP=4}
+: ${DIALOG_ESC=255}
+
+function start {
+  autossh_host=$(uci show autossh.@autossh[0].ssh | awk '{print $7}' | sed 's/@/ /g' | awk '{print $2}')
+  touch /root/.ssh/known_hosts
+  if grep $autossh_host /root/.ssh/known_hosts; then
+    /etc/init.d/autossh start
+  else
+    echo "$autossh_host not in known_hosts"
+  fi
+}
+
+function stop {
+  /etc/init.d/autossh stop
+}
+
+function status {
+  if pgrep autossh > /dev/null; then echo "1"; else echo "0"; fi
+}
+
+function configure {
+  if [ -s /etc/config/autossh ]
+  then
+    autossh_host=$(uci show autossh.@autossh[0].ssh | awk '{print $7}')
+    autossh_remoteport=$(uci show autossh.@autossh[0].ssh | awk '{print $6}' | sed 's/:/ /g' | awk '{print $1}')
+    autossh_localport=$(uci show autossh.@autossh[0].ssh | awk '{print $6}' | sed 's/:/ /g' | awk '{print $3}')
+  else
+    touch /etc/config/autossh
+  fi
+
+  dialog --ok-label "Submit" \
+    --help-button \
+    --title "AutoSSH Configuration" \
+    --form "AutoSSH (Persistent Secure Shell)\n\n\
+User@Host:   User and Host to establish the SSH tunnel\n\
+Remote Port: Remote port to bind through the SSH tunnel\n\
+Local Port:  Local port to bind tunnel (Default 22)\n \n" 16 60 3\
+    "User@Host:"	1 1	"$autossh_host"	1 14 48 0 \
+    "Remote Port:"	2 1	"$autossh_remoteport"	2 14 48 0 \
+    "Local Port:"	3 1	"$autossh_localport"	3 14 48 0 \
+  2>$CONF
+
+  return=$?
+
+  case $return in
+    $DIALOG_OK)
+      cat $CONF | { 
+        read -r autossh_host
+        read -r autossh_remoteport
+        read -r autossh_localport
+        touch /etc/config/autossh
+        uci set autossh.@autossh[0].ssh="-i /root/.ssh/id_rsa -N -T -R "$autossh_remoteport":localhost:"$autossh_localport" "$autossh_host""
+        uci commit autossh
+        rm $CONF
+      };;
+    $DIALOG_CANCEL)
+      rm $CONF
+      clear
+      exit;;
+    $DIALOG_HELP)
+      dialog --title "Help" \
+        --msgbox "\
+AutoSSH is a service which provides persistent SSH connections. If an SSH session drops, it will be quickly re-establish by AutoSSH. This service is typically used to provide a convenient and persistent reverse shell into the LAN Turtle on the standard SSH port 22 - though it may be configured with any standard SSH parameters to forward any arbitrary port.\n \n\
+Host - The username and hostname (DNS or IP) separated by @ for which to establish the SSH connection.\n \n\
+Port - The port number from which the remote server will bind.\n \n\
+Listen Port - The port number to which the remote port will bind.\n \n\
+Example: Per the defaults, the server will bind its local port 2222 back to the LAN Turtle port 22. In this scenario one may establish a persistent connection to their LAN Turtle from this reverse shell by first connecting to the remote host, and then from the remote host establishing an SSH connection to port 2222.\n \n\
+For a video walkthrough, please watch https://www.youtube.com/watch?v=J798iStWLOM&index=1&list=PLAC30AB8C5D17FCB5 - Hak5 Explaining NAT Traversal with SSH proxies.\
+" 20 60
+      configure
+      ;;
+    $DIALOG_ESC)
+      clear;;
+  esac
+}

@@ -1,0 +1,116 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+VERSION="1.0"
+DESCRIPTION="Post script output via HTTP"
+CONF=/tmp/httppost.form
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ITEM_HELP=4}
+: ${DIALOG_ESC=255}
+
+function start {
+  if [ -s /etc/config/httppost ]
+  then
+    httppost_url=$(uci get httppost.url)
+    /bin/bash /etc/turtle/httppost/script.sh > /tmp/httppost_output
+    CONTENT=`cat /tmp/httppost_output`
+    wget --post-data "content=$CONTENT" $httppost_url -O -
+  else
+    touch /etc/config/httppost
+    echo "httppost not configured"
+  fi
+}
+
+function stop {
+  echo stop>>/dev/null
+}
+
+function status {
+  echo 0
+}
+
+function configure {
+  mkdir -p /etc/turtle/httppost/
+  if [ -s /etc/config/httppost ]
+  then
+    httppost_url=$(uci get httppost.url)
+  else
+    touch /etc/config/httppost
+  fi
+
+  dialog --ok-label "Submit" \
+    --extra-button \
+    --extra-label "Edit Script" \
+    --help-button \
+    --title "Script to HTTP Post Configuration" \
+    --form "\n\
+URL: Location of script to accept post.\n \n\n" 11 60 1\
+    "URL:"		1 1	"$httppost_url"		1 12 200 0 \
+  2>$CONF
+
+  return=$?
+
+  case $return in
+    $DIALOG_OK)
+      cat $CONF | { 
+        read -r httppost_url
+        touch /etc/config/httppost
+        uci set httppost.url="$httppost_url"
+        uci commit httppost
+        rm $CONF
+        clear
+      };;
+    $DIALOG_CANCEL)
+      rm $CONF
+      clear
+      exit;;
+    $DIALOG_HELP)
+      dialog --title "Help" \
+        --msgbox "\
+This module sends the output of the specified command as an HTTP post to the specified URL\n\
+\n\
+PHP Content Save to File Example:\n\n\
+<?php \n  \$content=\$_POST['content'];\n  \$file="output.txt";\n  \$Saved_File=fopen(\$file, 'a');\n  fwrite(\$Saved_File, \$content);\n  fclose(\$Saved_File); \n?>\n\
+" 20 60
+      configure
+      ;;
+    $DIALOG_EXTRA)
+      if [ ! -e /etc/turtle/httppost/script.sh ]; then
+        touch /etc/turtle/httppost/script.sh
+        echo -e "\
+# The output of this script will be sent by http by script2http \n\
+# Example: uptime; ifconfig | grep inet\n\
+" > /etc/turtle/httppost/script.sh
+      fi
+  dialog \
+    --title "HTTP Post Script: /etc/turtle/httppost/script.sh" \
+    --editbox /etc/turtle/httppost/script.sh 18 72\
+  2>$CONF
+
+  return=$?
+
+  case $return in
+    $DIALOG_OK)
+      cat $CONF | {
+        cat $CONF > /etc/turtle/httppost/script.sh
+        rm $CONF
+        clear
+        configure
+      };;
+    $DIALOG_CANCEL)
+      rm $CONF
+      clear
+      configure;;
+    $DIALOG_ESC)
+      clear;;
+  esac
+
+
+    
+    ;;
+    $DIALOG_ESC)
+      clear;;
+  esac
+}

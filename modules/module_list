@@ -1,0 +1,17 @@
+autossh Maintain persistent secure shells
+cron Schedule tasks
+dns-spoof Forges replies to arbitrary DNS address
+dnsmasq-spoof DNSSpoof using DNSMasq
+follow-file Follow log printing data as file grows
+keymanager SSH Key Manager
+meterpreter Metasploit payload to maintain shells
+modulemanager Manage Modules
+netcat-revshell NetCat Reverse Shell
+nmap-scan Network Mapper discovers hosts and services on a network
+openvpn Openvpn client
+ptunnel Proxies TCP over Ping (ICMP) traffic
+script2email Email script output via SMTP
+script2http Post script output via HTTP
+sshfs Mounts remote File Systems over SSH
+uptime System Uptime
+urlsnarf Sniffs HTTP URL traffic

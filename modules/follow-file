@@ -1,0 +1,38 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+
+VERSION="1.0"
+DESCRIPTION="Follow log printing data as file grows"
+CONF=/tmp/autossh.form
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ITEM_HELP=4}
+: ${DIALOG_ESC=255}
+
+function start {
+  configure
+}
+
+function stop {
+  echo "Nothing to stop"
+}
+
+function status {
+  echo 0
+}
+
+function tail_file {
+  local tailfile="$1"
+  dialog --title "Following File: $tailfile" --clear --tailbox "$tailfile" 18 72
+}
+
+function configure {
+FILE=$(dialog --title "Follow a file" --stdout --title "Select file to follow" --fselect /tmp/ 18 60)
+if [ -f $FILE ]; then
+  tail_file "$FILE"
+else
+  dialog --title "Notice" --clear --msgbox "$FILE is not a regular file. Press [space] to select the file and [enter] to follow contents." 8 50
+fi
+}

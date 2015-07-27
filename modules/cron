@@ -1,0 +1,80 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+VERSION="1.0"
+DESCRIPTION="Schedule Tasks"
+CONF=/tmp/cron.form
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ITEM_HELP=4}
+: ${DIALOG_ESC=255}
+
+function configure {
+  if [ ! -e /etc/crontabs/root ]; then
+    touch /etc/crontabs/root
+    echo -e "\
+#  * * * * * command\n\
+#  | | | | +- - - - day of week (0 - 6) (Sunday=0)\n\
+#  | | | +- - - - - month (1 - 12)\n\
+#  | | +- - - - - - day of month (1 - 31)\n\
+#  | +- - - - - - - hour (0 - 23)\n\
+#  +- - - - - - - - minute (0 - 59)\n\
+#  \n\
+# 30   2 * * * start script2email # Run at 2:30 AM daily\n\
+# */15 * * * * start script2http  # Run every 15 minutes\n\
+# \n\
+# See Help for a list of modules which may be scheduled.\n\
+" > /etc/crontabs/root
+  fi
+
+  dialog \
+    --help-button \
+    --title "Crontab: /etc/crontabs/root" \
+    --editbox /etc/crontabs/root 18 72\
+  2>$CONF
+  return=$?
+  case $return in
+    $DIALOG_OK)
+      cat $CONF | {
+        cat $CONF > /etc/crontabs/root
+        /etc/init.d/cron stop
+        rm $CONF
+        /etc/init.d/cron start
+      };;
+    $DIALOG_HELP)
+      dialog --title "Help" \
+        --msgbox "Cron is a job scheduler which can be used to start and stop modules at specific times or regular intervals using the 'start' and 'stop' commands.\n \n\
+ 30   2 * * * start script2email # Run at 2:30 AM daily\n\
+ */15 * * * * start script2http  # Run every 15 minutes\n\
+ \n\
+Available modules:\n\
+$(ls -w 40 /etc/turtle/modules/)\n \n\
+Jobs may be temporarily disabled by prefixing them with a comment (#)\n \n\
+Syntax:\n\
+  * * * * * command\n\
+  | | | | +- - - - day of week (0 - 6) (Sunday=0)\n\
+  | | | +- - - - - month (1 - 12)\n\
+  | | +- - - - - - day of month (1 - 31)\n\
+  | +- - - - - - - hour (0 - 23)\n\
+  +- - - - - - - - minute (0 - 59)\n\
+" 20 60
+      configure
+      ;;
+    $DIALOG_CANCEL)
+      rm $CONF;;
+    $DIALOG_ESC)
+      rm $CONF;;
+  esac
+}
+
+function start {
+  /etc/init.d/cron reload
+  /etc/init.d/cron start
+}
+function stop {
+  /etc/init.d/cron stop
+}
+function status {
+ if pgrep crond > /dev/null; then echo "1"; else echo "0"; fi
+}

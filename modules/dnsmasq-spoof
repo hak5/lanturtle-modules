@@ -1,0 +1,87 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+VERSION="1.1"
+DESCRIPTION="DNSSpoof using DNSMasq instead of Dsniff tools"
+CONF=/tmp/dnsmasq.form
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ITEM_HELP=4}
+: ${DIALOG_ESC=255}
+
+function configure {
+
+  # Add dnsmasq configuration if not already in conf file
+  if ! grep -q addn-hosts=/etc/dnsmasq.hosts /etc/dnsmasq.conf; then
+    echo -e "no-dhcp-interface=
+server=8.8.8.8
+no-hosts
+addn-hosts=/etc/dnsmasq.hosts" >> /etc/dnsmasq.conf
+  fi
+
+  # Add example dnsmasq hosts if it doesn't already exist
+  if [ ! -e /etc/dnsmasq.hosts ]; then
+    touch /etc/dnsmasq.hosts
+    echo -e "172.16.84.1 example.com www.example.com" > /etc/dnsmasq.hosts
+  fi
+
+  dialog \
+    --help-button \
+    --title "DNSMasq Hosts Configuration (/etc/dnsmasq.hosts)" \
+    --editbox /etc/dnsmasq.hosts 18 72\
+  2>$CONF
+  return=$?
+  case $return in
+    $DIALOG_OK)
+      cat $CONF | {
+        cat $CONF > /etc/dnsmasq.hosts
+        rm $CONF
+      };;
+    $DIALOG_HELP)
+      dialog --title "Help" \
+        --msgbox "\
+As an alternative to DNSSpoof, DNSMasq can be used to forge replies to arbitrary DNS addresses / pointer queries on the LAN. \
+This is useful in bypassing hostname-based access controls, or in implementing a variety of man-in-the-middle attacks.\n\n\
+In some circumstances DNSMasq may perform better than DNSSpoof. The only configuration difference is the syntax of the hosts file.\n\n\
+For example, the IP address returned for a client lookup of the domain \"example.com\" can be replaced with that of the LAN Turtle itself, or a 3rd party server. \
+The dnsmasq.hosts editor lists the IP address and Domain names to spoof. The default example replaces example.com with the IP address 172.16.84.1 - the LAN Turtle default address.\n\n\
+Each line contains the IP address and one or more domains separated by spaces or tabs. For example:\n\n\
+172.16.84.1 example.com www.example.com mail.example.com\n\n
+In this scenario, the computer connected to the Internet through the LAN Turtle attempting to browse to this domain may be redirected to the spoofed IP.\n\n\
+" 20 72
+      configure
+      ;;
+    $DIALOG_CANCEL)
+      rm $CONF;;
+    $DIALOG_ESC)
+      rm $CONF;;
+  esac
+}
+
+function start {
+  if grep addn-hosts /etc/dnsmasq.conf &> /dev/null; then 
+    echo "DNSMasq already running with spoofhost. Restarting."
+    /etc/init.d/dnsmasq stop && /etc/init.d/dnsmasq start
+  else 
+    echo "Starting DNSMasq with spoofhost"
+    echo "addn-hosts=/etc/dnsmasq.hosts" >> /etc/dnsmasq.conf
+    /etc/init.d/dnsmasq stop && /etc/init.d/dnsmasq start
+    echo "DNSMasq Started with spoofhost"
+  fi
+}
+
+function stop {
+  if grep addn-hosts /etc/dnsmasq.conf &> /dev/null; then 
+    echo "Restarting DNSMasq without spoofhost"
+    sed -i '/addn-hosts=\/etc\/dnsmasq.hosts/d' /etc/dnsmasq.conf
+    /etc/init.d/dnsmasq stop && /etc/init.d/dnsmasq start
+    echo "DNSMasq restarted without spoofhost"
+  else
+    echo "DNSMasq isn't running with spoofhost"
+  fi
+}
+
+function status {
+    if grep addn-hosts /etc/dnsmasq.conf &> /dev/null; then echo "1"; else echo "0"; fi
+}

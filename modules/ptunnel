@@ -1,0 +1,103 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+VERSION="1.0"
+DESCRIPTION="Proxies TCP over Ping (ICMP) traffic"
+CONF=/tmp/ptunnel.form
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ITEM_HELP=4}
+: ${DIALOG_ESC=255}
+
+function start {
+  if [ -s /etc/config/ptunnel ]
+  then
+    ptunnel_host=$(uci get ptunnel.host)
+    ptunnel_local_port=$(uci get ptunnel.lport)
+    ptunnel_dst_host=$(uci get ptunnel.rhost)
+    ptunnel_dst_port=$(uci get ptunnel.rport)
+    echo ptunnel -p "$ptunnel_host" -lp "$ptunnel_local_port" -da "$ptunnel_dst_host" -dp "$ptunnel_dst_port" > /dev/null &
+    ptunnel -p "$ptunnel_host" -lp "$ptunnel_local_port" -da "$ptunnel_dst_host" -dp "$ptunnel_dst_port" > /dev/null &
+    echo -n "ptunnel started with pid: "; pidof ptunnel
+  else
+    touch /etc/config/ptunnel
+    echo "ptunnel not configured"
+  fi
+}
+
+function stop {
+  killall ptunnel
+}
+
+function status {
+  if pgrep ptunnel > /dev/null; then echo "1"; else echo "0"; fi
+}
+
+function configure {
+
+  if [ -s /etc/config/ptunnel ]
+  then
+    ptunnel_host=$(uci get ptunnel.host)
+    ptunnel_local_port=$(uci get ptunnel.lport)
+    ptunnel_dst_host=$(uci get ptunnel.rhost)
+    ptunnel_dst_port=$(uci get ptunnel.rport)
+  else
+    touch /etc/config/ptunnel
+  fi
+
+  dialog --ok-label "Submit" \
+    --help-button \
+    --title "PTunnel Configuration" \
+    --form "\nPTunnel Server: Address of the server running the ptunnel proxy.\n\
+Local Port: Port on localhost from which traffic will be tunneled.\n\
+Dst Server: Destination host to which traffic will be proxied.\n\
+Dst Port: Destination port to which traffic will be proxied.\n\n" 16 75 4\
+    "PTunnel Host:"	1 1	"$ptunnel_host"		1 15 40 0 \
+    "Local Port:"	2 1	"$ptunnel_local_port"	2 15 40 0 \
+    "Dst. Host:"	3 1	"$ptunnel_dst_host"	3 15 40 0 \
+    "Dst. Port:"	4 1	"$ptunnel_dst_port"	4 15 40 0 \
+  2>$CONF
+
+  return=$?
+
+  case $return in
+    $DIALOG_OK)
+      cat $CONF | { 
+        read -r ptunnel_host
+        read -r ptunnel_local_port
+        read -r ptunnel_dst_host
+        read -r ptunnel_dst_port
+        touch /etc/config/ptunnel
+        uci set ptunnel.host="$ptunnel_host"
+        uci set ptunnel.lport="$ptunnel_local_port"
+        uci set ptunnel.rhost="$ptunnel_dst_host"
+        uci set ptunnel.rport="$ptunnel_dst_port"
+        uci commit ptunnel
+        rm $CONF
+        clear
+      };;
+    $DIALOG_CANCEL)
+      rm $CONF
+      clear
+      exit;;
+    $DIALOG_HELP)
+      dialog --title "Help" \
+        --msgbox "Ping Tunnel, or ptunnel, is an application that allows you to reliably tunnel TCP connections to a remote host using ICMP echo request and reply packets, commonly known as ping requests and replies.\
+A common use case is to provide a secure covert reverse shell via SSH.\n\n\
+Ping Tunnel configuration accepts the following:\n\n\
+* Ptunnel Host: Address of the server running the ptunnel proxy - often a VPS or other such machine online with a static IP or domain.\n\
+* Local Port: TCP listening port on localhost through which traffic will be proxied to the ptunnel host.\n\
+* Dst Server: Destination host of the remote proxy to which traffic will be forwarded.\n\
+* Dst Port: Destination port to remote proxy to which traffic will be forwarded.\n\n\
+Example: example.com, 8000, example.com, 22\n\n\
+This would configure ptunnel to connect to the ptunnel server running on domain.com and forward all traffic going to port 8000 on localhost to port 22 on example.com.\n\n\
+With this an autoSSH session to the SSH server running on example.com port 22 may be established through the Ping Tunnel via localhost port 8000.\
+" 20 60
+      configure
+      ;;
+    $DIALOG_ESC)
+      clear;;
+  esac
+}
+

