@@ -133,3 +133,14 @@ The LAN Turtle is powered via USB and requires 5V at ~200mA. Typical power usage
 * Concealed in a telephone room plugged into a free Ethernet cable powered by a typical smartphone USB wall charger.
 * Concealed in a server rack powered by a server's available USB port using a USB Data Blocker inline USB dongle (Available from HakShop.com) to prevent the server's operating system from identifying the LAN Turtle.
 * Connected to a penetration tester's Android tablet or smartphone using a USB OTG cable (available from HakShop.com) for use on-the-go with an Android SSH client. Note: Some smartphones and tablets do not provide the current necessary to power the LAN Turtle. Most Nexus models have been tested to function properly.
+
+##Specifications
+
+* Atheros AR9331 SoC at 400 MHz MIPS
+* 16 MB Onboard Flash
+* 64 MB DDR2 RAM
+* 10/100 Ethernet Port
+* USB Ethernet Port - Realtek RTL8152
+* Indicator LED (Green Power, Amber Status)
+* Button (inside case for Factory Reset / Firmware Recovery)
+* Dimensions: 95 x 23 x 31 mm
