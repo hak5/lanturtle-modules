@@ -148,11 +148,12 @@ The LAN Turtle is powered via USB and requires 5V at ~200mA. Typical power usage
 ##Factory Reset / "Unbricking"
 
 In the extreme case that a LAN Turtle has become permenantly inaccessible or inoperative, there is a quick method for recovery using a special web interface.
-* Download the latest factory image from https://downloads.lanturtle.com/turtle-2-factory.bin
-* Carefully open the LAN Turtle case by removing the two screws underneath the sticker on the bottom
-* While holding the button on the bottom of the LAN Turtle, plug the device into a computer
-* After 3 seconds let go of the button and wait an additional 30 seconds to receive an IP address from the LAN Turtle
-* If you do not receive an IP address in the 192.168.x range from the LAN Turtle within a minute, statically assign the LAN Turtle's interface to 192.168.1.2 (netmask 255.255.255.0)
-* Browse to the LAN Turtle firmware recovery web interface at http://192.168.1.1
-* Follow the on screen prompts to upload and flash the factory image downloaded in step 1
-* When the flash is complete the LAN Turtle will reboot and will be accessible again from 172.16.84.1 with the default username root and password sh3llz
+
+1.  Download the latest factory image from https://downloads.lanturtle.com/turtle-2-factory.bin
+2.  Carefully open the LAN Turtle case by removing the two screws underneath the sticker on the bottom
+3.  While holding the button on the bottom of the LAN Turtle, plug the device into a computer
+4.  After 3 seconds let go of the button and wait an additional 30 seconds to receive an IP address from the LAN Turtle
+5.  If you do not receive an IP address in the 192.168.x range from the LAN Turtle within a minute, statically assign the LAN Turtle's interface to 192.168.1.2 (netmask 255.255.255.0)
+6.  Browse to the LAN Turtle firmware recovery web interface at http://192.168.1.1
+7.  Follow the on screen prompts to upload and flash the factory image downloaded in step 1
+8.  When the flash is complete the LAN Turtle will reboot and will be accessible again from 172.16.84.1 with the default username root and password sh3llz
