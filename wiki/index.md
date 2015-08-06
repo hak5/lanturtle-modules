@@ -157,3 +157,13 @@ In the extreme case that a LAN Turtle has become permenantly inaccessible or ino
 6.  Browse to the LAN Turtle firmware recovery web interface at http://192.168.1.1
 7.  Follow the on screen prompts to upload and flash the factory image downloaded in step 1
 8.  When the flash is complete the LAN Turtle will reboot and will be accessible again from 172.16.84.1 with the default username root and password sh3llz
+
+##Manually Upgrading
+
+LAN Turtle firmware may be updated"over the air" by choosing Check for Updates from the Config menu. If an Internet providing Ethernet connection is not available, updates may be flashed to the device manually using the following process:
+
+1. Download the latest UPDATE file from https://downloads.lanturtle.com/
+2. Verify that the MD5 checksums match
+3. Manually SCP the file to the LAN Turtle in /tmp (ex: scp turtle-2.bin root@172.16.84.1:/tmp/)
+4. From the LAN Turtle, exit shell to the bash prompt and issue: sysupgrade -n /tmp/turtle-2.bin
+5. Wait about 5 minutes for the LAN Turtle to flash the firmware and reboot
