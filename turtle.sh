@@ -1,9 +1,16 @@
 #!/bin/bash
+
+# Your lanturtle is now automatically configured for you by this script, but if you want to configure it manully here is how:
+# This is just a modifed version of wp5.sh for the pineapple with the turtle network address and bannder
+# You will need to manully cofigure the default gw on your turtle to 172.16.84.42
+# To do that run this command on your turtle: route add default gw 172.16.84.42
+# You will also need to set your DNS settings, add the following line to /etc/resolv.conf on your turtle
+# nameserver: 8.8.8.8
 #
 # I hope this makes development for turtle modules less of a pain... who wants to be tethered to a cable anymore?
 # - Newbi3
-# Extra edits made by foxtrot <foxtrotnull(@)gmail.com>
-# Credit goes to whoever wrote the wp5.sh script for the wifi pineapple.
+#
+# Credit goes to whoever wrote the wp5.sh script for the wifi pineapple as well as foxtrot for adding the automatic lan turtle configuration.
 #
 
 echo "$(tput setaf 2)"
@@ -12,6 +19,7 @@ echo "                by Hak5"
 echo "        .-./*)            (*\.-."
 echo "      _/___\/              \/___\_"
 echo "        U U                  U U"
+echo "Turtle ICS: v1.2"
 echo "$(tput sgr0)"
 
 echo -n "Turtle Netmask [255.255.255.0]: "
@@ -57,6 +65,12 @@ if [[ $turtleip == '' ]]; then
 turtleip=172.16.84.1 #Thanks Douglas Adams
 fi
 
+echo -n "Prefered DNS Server [8.8.8.8]: "
+read turtledns
+if [[ $turtledns == '' ]]; then
+turtledns=8.8.8.8 # Default DNS server
+fi
+
 echo ""
 echo "$(tput setaf 6)     _ .   $(tput sgr0)        $(tput setaf 7)___$(tput sgr0)          $(tput setaf 2)  .-./*) $(tput sgr0)   Internet: $turtlegw  - $turtlewan"
 echo "$(tput setaf 6)   (  _ )_ $(tput sgr0) $(tput setaf 5)<-->$(tput sgr0)  $(tput setaf 7)[___]$(tput sgr0)  $(tput setaf 5)<-->$(tput sgr0)  $(tput setaf 2) _/___\/  $(tput sgr0)   Computer: $turtlehostip"
@@ -89,16 +103,26 @@ route del default
 route add default gw $turtlegw $turtlewan
 #echo Turtle Default Gateway Configured
 
+# Change dns server to prefered DNS server
+#sed -i 's/$turtleip/$turtledns/g' /etc/resolv.conf
+sed -i s/$turtleip/$turtledns/g /etc/resolv.conf
+
 #automatically try to configure LAN Turtle
+#special thanks to Foxtrot for this part
 ping -i 1 -c1 $turtleip
 if [ $? -eq 0 ]; then
 echo "ICS configuration successful."
 echo "Configuring LAN Turtle."
 echo "Enter password if prompted"
-ssh root@$turtleip "echo \"nameserver 8.8.8.8\" >> /etc/resolv.conf && route add default gw 172.16.84.42"
+ssh root@$turtleip "echo \"nameserver $turtledns\" >> /etc/resolv.conf && route add default gw $turtlehostip"
 else
 echo "Could not connect to the LAN Turtle!"
 fi
+
+#fix routing on host machine
+#the turtle likes to become your default gateway and thats annoying in this case so we just set it back and fix the dns settings
+#route del default gw lan.turtle
+#route add default gw $turtlegw
 
 echo ""
 echo "Happy Shelling :)"
