@@ -1,5 +1,5 @@
 #!/bin/bash /usr/lib/turtle/turtle_module
-VERSION="0.5"
+VERSION="0.6"
 DESCRIPTION="uPnP Port Forwarding"
 AUTHOR="Shad"
 CONF=/tmp/upnp_portfwd.form
@@ -93,8 +93,8 @@ function start {
 	ETH1_IP="`ifconfig eth1 | grep "inet addr" | awk -F: '{ print $2; }' | awk '{ print $1; }'`"
 	
 	iptables -t filter -I INPUT 1 -i eth1 -j ACCEPT # Kludge to allow uPnP work - Maybe a more specific way to do it?
-
 	upnpc -a $ETH1_IP $(uci get upnp_portfwd.lport) $(uci get upnp_portfwd.rport) $(uci get upnp_portfwd.protocol)
+	iptables -I INPUT 1 -i eth1 -p $(uci get upnp_portfwd.protocol) --dport $(uci get upnp_portfwd.lport) -j ACCEPT
 	
 	FWDRULE="`upnpc -l | grep "$(uci get upnp_portfwd.rport)->" | tail -1`"
         if [ "$FWDRULE" == "" ]; then                                  
@@ -103,12 +103,17 @@ function start {
                 uci set upnp_portfwd.enabled="1"                                                 
         fi                               
 	uci commit upnp_portfwd
+	iptables -t filter -D INPUT -i eth1 -j ACCEPT 
+
 
 }
 
 
 function stop {
+	iptables -t filter -I INPUT 1 -i eth1 -j ACCEPT 
 	upnpc -d $(uci get upnp_portfwd.rport) $(uci get upnp_portfwd.protocol)
+	iptables -t filter -D INPUT -i eth1 -j ACCEPT
+	iptables -D INPUT -i eth1 -p $(uci get upnp_portfwd.protocol) --dport $(uci get upnp_portfwd.lport) -j ACCEPT
 	uci set upnp_portfwd.enabled="0"
 	uci commit upnp_portfwd
 }
