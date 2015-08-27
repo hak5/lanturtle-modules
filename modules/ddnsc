@@ -1,0 +1,107 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+VERSION="0.5"
+DESCRIPTION="DDNSC - Dynamic Domain Name Service Client"
+AUTHOR="Shad"
+CONF=/tmp/ddnsc.form
+
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ITEM_HELP=4}
+: ${DIALOG_ESC=255}
+
+function configure {
+
+if [ -s "/etc/config/ddns" ]; then
+	ddnsc_service=$(uci get ddns.myddns.service_name)
+	ddnsc_domain=$(uci get ddns.myddns.domain)
+	ddnsc_username=$(uci get ddns.myddns.username)
+	ddnsc_password=$(uci get ddns.myddns.password)
+else
+	touch /etc/config/ddns
+fi
+
+  dialog --ok-label "Submit" \
+    --help-button \
+    --title "DDNSC - Dynamic Domain Name Service Client Configuration" \
+    --form "DDNS Provider Setup\n\n\
+Service:  DDNS Service Provider\n\
+Domain:   Your DDNS host.domain\n\
+Username: Username at provider\n\
+Password: Password at provider\n \n" 16 60 4\
+    "Service:"		1 1	"$ddnsc_service"	1 14 48 0 \
+    "Domain:"		2 1	"$ddnsc_domain"		2 14 48 0 \
+    "Username:"		3 1	"$ddnsc_username"	3 14 48 0 \
+    "Password:"		4 1	"$ddnsc_password"	4 14 48 0 \
+  2>$CONF
+
+  return=$?
+
+  case $return in
+    $DIALOG_OK)
+      cat $CONF | { 
+        read -r ddnsc_service
+        read -r ddnsc_domain
+        read -r ddnsc_username
+	read -r ddnsc_password
+        touch /etc/config/ddns
+	uci set ddns.myddns.service_name="$ddnsc_service"
+	uci set ddns.myddns.domain="$ddnsc_domain"
+	uci set ddns.myddns.username="$ddnsc_username"
+	uci set ddns.myddns.password="$ddnsc_password"
+        uci commit ddns
+        rm $CONF
+      };;
+    $DIALOG_CANCEL)
+      rm $CONF
+      clear
+      exit;;
+    $DIALOG_HELP)
+      dialog --title "Help" \
+        --msgbox "\
+DDNSC is a service which provides automatic Dynamic Domain Name updates. It is particulary useful when used in conjuction with UPnP_Portfwd to access the LAN Turtle
+directly from the outside.\n \n
+You would need to register the hostname in any of the supported DDNS providers (see /usr/lib/ddns/services) and update the configuration with your info.\n \n
+Example:\n \n
+Service: no-ip.com\n
+Hostname: turtle.ddns.net\n
+Username: your@email.com\n
+Password: yourpassword\n \n
+" 20 60
+      configure
+      ;;
+    $DIALOG_ESC)
+      clear;;
+  esac
+}
+
+
+function start {
+	if [ ! -e "/etc/config/ddns" ]; then
+#		opkg update
+		opkg install ddns-scripts
+	fi
+	uci set ddns.myddns.enabled="1"
+	uci commit ddns.myddns
+#	/etc/init.d/ddns enable
+	/etc/init.d/ddns start
+}
+
+function stop {
+	uci set ddns.myddns.enabled="0"
+	uci commit ddns.myddns
+	/etc/init.d/ddns stop
+}
+
+
+function status {
+	if [ "$(uci get ddns.myddns.enabled)" == "1" ]; then
+		echo "1"
+	else
+		echo "0"
+	fi
+}
+
+
