@@ -1,0 +1,128 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+VERSION="0.6"
+DESCRIPTION="uPnP Port Forwarding"
+AUTHOR="Shad"
+CONF=/tmp/upnp_portfwd.form
+
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ITEM_HELP=4}
+: ${DIALOG_ESC=255}
+
+function configure {
+  if [ -s /etc/config/upnp_portfwd ]
+  then
+    upnp_portfwd_lport=$(uci get upnp_portfwd.lport)
+    upnp_portfwd_rport=$(uci get upnp_portfwd.rport)
+    upnp_portfwd_proto=$(uci get upnp_portfwd.protocol)
+  else
+    touch /etc/config/upnp_portfwd
+  fi
+
+  dialog --ok-label "Submit" \
+    --help-button \
+    --title "uPnp Port Forwarding Configuration" \
+    --form "Port Forward\n\n\
+Router Port: External port of router to be forwarded\n\
+Local Port:  Port of service running in Turtle's WAN\n\
+Protocol:    tcp or udp\n \n" 16 60 3\
+    "Router Port:"	1 1	"$upnp_portfwd_rport"   1 14 48 0 \
+    "Local Port:"	2 1	"$upnp_portfwd_lport"	2 14 48 0 \
+    "Protocol:"		3 1	"$upnp_portfwd_proto"	3 14 48 0 \
+  2>$CONF
+
+  return=$?
+
+  case $return in
+    $DIALOG_OK)
+      cat $CONF | { 
+        read -r upnp_portfwd_rport
+        read -r upnp_portfwd_lport
+        read -r upnp_portfwd_proto
+        touch /etc/config/upnp_portfwd
+	uci set upnp_portfwd.lport="$upnp_portfwd_lport"
+	uci set upnp_portfwd.rport="$upnp_portfwd_rport"
+	uci set upnp_portfwd.protocol="$upnp_portfwd_proto"
+        uci commit upnp_portfwd
+        rm $CONF
+      };;
+    $DIALOG_CANCEL)
+      rm $CONF
+      clear
+      exit;;
+    $DIALOG_HELP)
+      dialog --title "Help" \
+        --msgbox "\
+uPnP Portfwd is a service which provides automatic port forwarding when connected to some uPnP enabled routers.\nThis service is typically used to provide a 
+convenient and persistent DIRECT shell from the outside into the LAN Turtle so that a remote "proxy" server or host is not needed.\n*IF* the router is uPnP enabled
+and forwards the port it would be possible to connect directly to the Turtle from any arbitrary/anonymous location, even from TOR.\n \n
+Remote Port - External port on the router to be forwarded to the Turtle.\n \n\
+Local Port - The port where a local service is running in the Turtle (Tipically 22 -ssh-)\n \n\
+Protocol - TCP or UDP (tcp for ssh)\n \n\
+Example: Per the defaults, the router will forward its external port 45000 to the LAN Turtle port 22. In this scenario one may establish a direct connection to the 
+LAN Turtle by ssh'ing into the router's external interface port 45000: ssh -p 45000 root@external.router.ip \n \n
+While this won't work in many cases, it may come handy when it does, which is frequent for some telco provided SOHO routers.\n \n\
+" 20 60
+      configure
+      ;;
+    $DIALOG_ESC)
+      clear;;
+  esac
+}
+
+
+
+function start {
+	if [ ! -e "/etc/config/upnp_portfwd" ]; then
+		touch /etc/config/upnp_portfwd
+		uci set upnp_portfwd.lport="22"                                                                                                                        
+    
+	        uci set upnp_portfwd.rport="45000"                                                                                                                     
+    
+	        uci set upnp_portfwd.protocol="tcp"                                                                                                                    
+    
+	        uci commit upnp_portfwd
+	fi
+	if [ ! -e "/usr/bin/upnpc" ]; then
+		opkg install miniupnpc
+	fi
+
+	ETH1_IP="`ifconfig eth1 | grep "inet addr" | awk -F: '{ print $2; }' | awk '{ print $1; }'`"
+	
+	iptables -t filter -I INPUT 1 -i eth1 -j ACCEPT # Kludge to allow uPnP work - Maybe a more specific way to do it?
+	upnpc -a $ETH1_IP $(uci get upnp_portfwd.lport) $(uci get upnp_portfwd.rport) $(uci get upnp_portfwd.protocol)
+	iptables -I INPUT 1 -i eth1 -p $(uci get upnp_portfwd.protocol) --dport $(uci get upnp_portfwd.lport) -j ACCEPT
+	
+	FWDRULE="`upnpc -l | grep "$(uci get upnp_portfwd.rport)->" | tail -1`"
+        if [ "$FWDRULE" == "" ]; then                                  
+		uci set upnp_portfwd.enabled="0"
+        else                                                           
+                uci set upnp_portfwd.enabled="1"                                                 
+        fi                               
+	uci commit upnp_portfwd
+	iptables -t filter -D INPUT -i eth1 -j ACCEPT 
+
+
+}
+
+
+function stop {
+	iptables -t filter -I INPUT 1 -i eth1 -j ACCEPT 
+	upnpc -d $(uci get upnp_portfwd.rport) $(uci get upnp_portfwd.protocol)
+	iptables -t filter -D INPUT -i eth1 -j ACCEPT
+	iptables -D INPUT -i eth1 -p $(uci get upnp_portfwd.protocol) --dport $(uci get upnp_portfwd.lport) -j ACCEPT
+	uci set upnp_portfwd.enabled="0"
+	uci commit upnp_portfwd
+}
+
+function status {
+	if [ "$(uci get upnp_portfwd.enabled)" == "1" ]; then
+		echo "1"
+	else
+		echo "0"
+	fi
+}
+
