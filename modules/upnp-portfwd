@@ -87,6 +87,7 @@ function start {
 	        uci commit upnp_portfwd
 	fi
 	if [ ! -e "/usr/bin/upnpc" ]; then
+		opkg update
 		opkg install miniupnpc
 	fi
 
@@ -119,7 +120,7 @@ function stop {
 }
 
 function status {
-	if [ "$(uci get upnp_portfwd.enabled)" == "1" ]; then
+	if [ "$(uci get upnp_portfwd.enabled 2>/dev/null)" == "1" ]; then
 		echo "1"
 	else
 		echo "0"

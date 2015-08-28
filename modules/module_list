@@ -15,3 +15,6 @@ script2http Post script output via HTTP
 sshfs Mounts remote File Systems over SSH
 uptime System Uptime
 urlsnarf Sniffs HTTP URL traffic
+clomac Clone Clients MAC address into WAN interface
+upnp-portfwd uPnP Port Forwarding
+ddnsc Dynamic Domain Name Service
