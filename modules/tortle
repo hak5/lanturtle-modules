@@ -1,0 +1,98 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+VERSION="0.3"
+DESCRIPTION="TORTLE - TOR TURTLE Gateway + TOR Hidden Shell"
+AUTHOR="Shad"
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ITEM_HELP=4}
+: ${DIALOG_ESC=255}
+
+function tortlecfg {
+	if [ ! -e "/etc/config/tortle" ]; then
+		touch /etc/config/tortle
+		uci set tortle.socksip="172.16.84.1"
+		uci set tortle.socksport="5090"
+		uci set tortle.tport="22"
+		uci set tortle.lport="22"
+		uci set tortle.forwarding="1"
+		uci commit tortle
+        fi                                        
+	if [ -e "/var/lib/tor/hidden/hostname" ]; then
+		tortle_hostname="$(cat /var/lib/tor/hidden/hostname)"
+		uci set tortle.hostname="$tortle_hostname"
+	else
+	        tortle_hostname="You need to start/run tor first to obtain an onion address"
+	fi
+	tortle_tport="$(uci get tortle.tport)"
+	tortle_lport="$(uci get tortle.lport)"
+	tortle_socksip="$(uci get tortle.socksip)"
+	tortle_socksport="$(uci get tortle.socksport)"
+	tortle_forwarding="$(uci get tortle.forwarding)"
+
+}
+
+
+function configure {
+if [ "$tortle_hostname" == "" ]; then
+	tortle_hostname="You need to start/run tortle first to obtain an onion address"
+fi
+tortlecfg
+
+  dialog --title "tortle" --msgbox "\n\
+NOTE: This is an initial version.\n\\n\
+TOR SHELL\n\
+=========\n\
+Until I finish testing and add the code to customize its parameters in the gui, these are the defaults:\n\n\
+Hostname: $tortle_hostname\n\
+TOR Port: $tortle_tport (Redirects to local port $tortle_lport)\n\n\
+
+TOR GATEWAY\n\
+===========\n\
+At this time, it is just a regular TOR Proxy but my plan is to evolve it into a much more convenient and secure fully isolating Gateway.\n\n
+The LAN Turtle (with its two ethernet interfaces) is clearly perfect for that purpose, although I have to figure the best way to do it without 
+affecting the operation of other modules/functions that may be running at the same time (some iptables playing needed).\n\n\
+In the meantime, please notice DNS or other well known leaks are NOT being actively prevented. Use it accordingly.\n\n\
+TOR Proxy is in $tortle_socksip:$tortle_socksport\n \n" 33 72
+}
+
+
+function start {
+	if [ ! -e "/usr/sbin/tor" ]; then
+		opkg update && opkg install tor
+	fi
+	if [ ! -e "/var/lib/tor" ]; then
+		mkdir -p /var/lib/tor
+		chown sshd.sshd /var/lib/tor
+	fi
+	tortlecfg
+	(
+	echo "User sshd"
+	echo "RunAsDaemon 1"
+	echo "PidFile /tmp/tor.pid"
+	echo "DataDirectory /var/lib/tor"
+	echo "SocksPort $tortle_socksip:$tortle_socksport"
+	#echo "DNSPort 53"
+	echo "HiddenServiceDir /var/lib/tor/hidden/"
+	echo "HiddenServicePort $tortle_tport 127.0.0.1:$tortle_lport"
+	) > /tmp/tortlerc
+	echo "$tortle_forwarding" > /proc/sys/net/ipv4/ip_forward                     
+}	
+
+
+function stop {
+	killall -9 tor
+	echo "1" > /proc/sys/net/ipv4/ip_forward    
+	echo "Tortle Proxy and Tortle Shell have been stopped."
+}
+
+
+function status {
+	if pgrep -x tor > /dev/null; then
+		echo "1"	
+	else 
+		echo "0"
+	fi
+}
