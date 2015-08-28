@@ -17,3 +17,4 @@ uptime System Uptime
 urlsnarf Sniffs HTTP URL traffic
 clomac Clone Clients MAC address into WAN interface
 upnp-portfwd uPnP Port Forwarding
+ddnsc Dynamic Domain Name Service
