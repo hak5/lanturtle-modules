@@ -88,7 +88,7 @@ function stop {
 		cp /etc/dnsmasq.conf /etc/dnsmasq.conf.back
                 cat /etc/dnsmasq.conf.back | grep -v clomac > /etc/dnsmasq.conf
         fi                        
-	:>/tmp/clomac_pivot
+	rm -f /tmp/clomac_pivot
 	ifconfig eth1 down
 	macchanger -m $(uci get clomac.eth1mac) eth1
 	ifconfig eth1 up
