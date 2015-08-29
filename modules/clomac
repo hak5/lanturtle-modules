@@ -1,5 +1,5 @@
 #!/bin/bash /usr/lib/turtle/turtle_module
-VERSION="1.1"
+VERSION="1.2"
 DESCRIPTION="Clone Client's MAC address into WAN interface"
 AUTHOR="Shad"
 
@@ -13,34 +13,71 @@ AUTHOR="Shad"
 function configure {
   dialog --title "clomac" --msgbox "\n\
 (\___/) \n\
-(='.'=)    Nothing to configure here.\n\
+(='.'=)    Nothing to configure here... yet.\n\
 (\")_(\")\ \n\
 " 9 72
 }
 
+function clonemac {
+	if [ "$CLIENT_MAC" != "$ETH1MAC" ]; then 
+		echo "Cloning CLIENT_MAC: $CLIENT_MAC" >> /tmp/clomac.debug
+		uci set clomac.eth1mac="$ETH1MAC"
+		uci commit clomac
+		ifconfig eth1 down                                                                                   
+		macchanger -m "$CLIENT_MAC" eth1        # Hope there is no IDS that alerts about the MAC change.     
+		ifconfig eth1 up                                                                                     
+		sleep 1                                                                                              
+		ETH1_IP="`ifconfig eth1 | grep "inet addr"`"                                                         
+		if [ "$ETH1_IP" == "" ]; then   # Maybe we didn't get an IP because of MAC Filtering? Try again now!
+			echo "Trying to get a new IP address via DHCP" >> /tmp/clomac.debug
+			uci set network.wan.macaddr="$CLIENT_MAC"	# Workaround to avoid udhcpc restoring the default MAC
+			killall -9 udhcpc                                                                            
+#			udhcpc -p /var/run/udhcpc-eth1.pid -s /lib/netifd/dhcp.script -f -t 0 -i eth1 -C             
+		fi                                                                                                   
+		else
+			echo "CLIENT_MAC and ETH1MAC are the same. Nothing to do." >> /tmp/clomac.debug
+	fi
+}
 
 function start {
+	if [ ! -e "/etc/config/clomac" ]; then
+		touch /etc/config/clomac
+		uci set clomac.version="1.2"	# Workaround to know what to do on updates   
+		uci set clomac.trylast="1"      # if 1 AND not find a dhcp client, it will clone the last seen client MAC (if there is one)
+		uci set clomac.clientmac="$(macchanger -s eth1 | awk '{ print $3}')"
+		uci set clomac.eth1mac="22:22:22:22:22:22"
+		uci commit clomac
+	fi
 	if [ "`grep clomac /etc/dnsmasq.conf`" == "" ]; then
 		echo "dhcp-script=/tmp/clomac_pivot" >> /etc/dnsmasq.conf
 	fi
-	echo "#!/bin/bash" > /tmp/clomac_pivot
-	echo "/etc/turtle/modules/clomac start" >> /tmp/clomac_pivot
-	chmod 755 /tmp/clomac_pivot
-	echo "debug" >> /tmp/clomac.debug
+	if [ ! -e "/tmp/clomac_pivot" ]; then
+		echo "#!/bin/bash" > /tmp/clomac_pivot
+		echo "/etc/turtle/modules/clomac start" >> /tmp/clomac_pivot
+		chmod 755 /tmp/clomac_pivot
+		ETH1MAC="$(uci get network.wan.macaddr)"
+		uci set clomac.eth1mac="$ETH1MAC"
+		uci commit clomac
+		if [ ! -e "/tmp/clomac.debug" ]; then
+			echo "Launching at job in 1 min" >> /tmp/clomac.debug
+			at -f /tmp/clomac_pivot now + 1 min 2> /dev/null
+		fi
+	fi
+	
+	date >> /tmp/clomac.debug
 
 	CLIENT_MAC="`cat /tmp/dhcp.leases | tail -1 | awk '{ print $2; }'`"
+	ETH1MAC="$(macchanger -s eth1 | awk '{ print $3; }')"
 	if [ "$CLIENT_MAC" != "" ]; then
-		if [ "$CLIENT_MAC" != "`macchanger -s eth1 | awk '{ print $3; }'`" ]; then
-			ifconfig eth1 down
-			macchanger -s eth1 | awk '{ print $3; }' > /tmp/clomac.srcmac
-			macchanger -m "$CLIENT_MAC" eth1
-			ifconfig eth1 up
-			sleep 1
-			ETH1_IP="`ifconfig eth1 | grep "inet addr"`"
-			if [ "$ETH1_IP" == "" ]; then
-							killall -9 udhcpc
-				udhcpc -p /var/run/udhcpc-eth1.pid -s /lib/netifd/dhcp.script -f -t 0 -i eth1 -C 
-			fi
+		echo "Got CLIENT_MAC from dhcp.leases" >> /tmp/clomac.debug
+		uci set clomac.clientmac="$CLIENT_MAC"	
+		uci commit clomac
+		clonemac
+	elif [ "$(uci get clomac.trylast)" == "1" ]; then
+		if [ "$(uci get clomac.clientmac)" != "" ]; then
+			CLIENT_MAC="$(uci get clomac.clientmac)"
+			echo "Don't have a dhcp.leases but will use last seen CLIENT_MAC: $CLIENT_MAC" >> /tmp/clomac.debug
+			clonemac
 		fi
 	fi
 }
@@ -51,9 +88,9 @@ function stop {
 		cp /etc/dnsmasq.conf /etc/dnsmasq.conf.back
                 cat /etc/dnsmasq.conf.back | grep -v clomac > /etc/dnsmasq.conf
         fi                        
-	rm -f /tmp/clomac_pivot
+	:>/tmp/clomac_pivot
 	ifconfig eth1 down
-	macchanger -m `cat /tmp/clomac.srcmac` eth1
+	macchanger -m $(uci get clomac.eth1mac) eth1
 	ifconfig eth1 up
 }
 
@@ -65,4 +102,3 @@ function status {
 		echo 1
 	fi
 }
-
