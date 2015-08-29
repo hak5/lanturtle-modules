@@ -1,5 +1,5 @@
 #!/bin/bash /usr/lib/turtle/turtle_module
-VERSION="0.5"
+VERSION="0.6"
 DESCRIPTION="TORtle - TOR Turtle Gateway + TOR hidden SHELL/Service"
 AUTHOR="Shad"
 
@@ -11,99 +11,122 @@ AUTHOR="Shad"
 : ${DIALOG_ESC=255}
 
 function tortlecfg {
-        if [ ! -e "/etc/config/tortle" ]; then
-                touch /etc/config/tortle
-                uci set tortle.socksip="172.16.84.1"
-                uci set tortle.socksport="5090"
-                uci set tortle.tport="22"
-                uci set tortle.lport="22"
-                uci set tortle.forwarding="1"
-                uci set tortle.hiddendir="/etc/tor/hidden"
-                uci commit tortle
+	if [ "$(uci get tortle.version)" != "0.6" ]; then
+		rm /etc/config/tortle
+	fi
+	if [ ! -e "/etc/config/tortle" ]; then
+		touch /etc/config/tortle
+		uci set tortle.version="0.6"
+		uci set tortle.socksip="172.16.84.1"
+		uci set tortle.socksport="5090"
+		uci set tortle.tport="22"
+		uci set tortle.lport="22"
+		uci set tortle.forwarding="1"
+		uci set tortle.hiddendir="/etc/tor/hidden"
+		uci commit tortle
         fi
 
-        tortle_tport="$(uci get tortle.tport)"
-        tortle_lport="$(uci get tortle.lport)"
-        tortle_socksip="$(uci get tortle.socksip)"
-        tortle_socksport="$(uci get tortle.socksport)"
-        tortle_forwarding="$(uci get tortle.forwarding)"
-        tortle_hiddendir="$(uci get tortle.hiddendir)"
+	tortle_tport="$(uci get tortle.tport)"
+	tortle_lport="$(uci get tortle.lport)"
+	tortle_socksip="$(uci get tortle.socksip)"
+	tortle_socksport="$(uci get tortle.socksport)"
+	tortle_forwarding="$(uci get tortle.forwarding)"
+	tortle_hiddendir="$(uci get tortle.hiddendir)"
 
-        if [ -e "$tortle_hiddendir/hostname" ]; then
-                tortle_hostname="$(cat $tortle_hiddendir/hostname)"
-                uci set tortle.hostname="$tortle_hostname"
-                uci commit tortle
-        else
-                tortle_hostname="--Please first START TORtle to generate an Onion address--"
-        fi
+	if [ -e "$tortle_hiddendir/hostname" ]; then
+		tortle_hostname="$(cat $tortle_hiddendir/hostname)"
+		uci set tortle.hostname="$tortle_hostname"
+		uci commit tortle
+	else
+	        tortle_hostname="--Please first START TORtle to generate an Onion address--"
+	fi
 }
-# Parameters to configure for torshell: tortle.tport, tortle.lport                          
-# Parameters to configure for TOR Gateway: tortle.forwarding, tortle.dnsport                
-# Parameters in dobt: tortle.socksip, tortle.socksport, tortle.controlport, etc...          
+
+# Parameters to configure for torshell: tortle.tport, tortle.lport
+# Parameters to configure for TOR Gateway: tortle.forwarding, tortle.dnsport
+# Parameters in dobt: tortle.socksip, tortle.socksport, tortle.controlport, etc...
 # Maybe allow to configure extra hidden services such a web server, etc... Probably should be done in additional auxiliary modules.
-function configure {                                                                                                               
-tortlecfg                                                                                                                          
-                                                                                                                                   
-  dialog --title "TORtle" --msgbox "\n\                                                                                            
-NOTE: This is an initial version.\n\\n\                                                                                            
-TOR SHELL\n\                                                                                                                       
-=========\n\                                                                                                                       
-Until I finish testing and decide which parameters to customize in the gui, these are the defaults:\n\n\                           
-Hostname: $tortle_hostname\n\                                                                                                      
-TOR Port: $tortle_tport (Redirected to localhost:$tortle_lport)\n\n\                                                               
-                                                                                                                                   
-TOR GATEWAY\n\                                                                                                                     
-===========\n\                                                                                                                     
+function configure {
+tortlecfg
+
+  dialog --title "TORtle" --msgbox "\n\
+NOTE: This is an initial version.\n\\n\
+TOR SHELL\n\
+=========\n\
+Until I finish testing and decide which parameters to customize in the gui, these are the defaults:\n\n\
+Hostname: $tortle_hostname\n\
+TOR Port: $tortle_tport (Redirected to localhost:$tortle_lport)\n\n\
+
+TOR GATEWAY\n\
+===========\n\
 At this time, it is just a regular TOR Proxy but my plan is to evolve it into a much more convenient and secure fully isolating Gateway.\n\n
-The LAN Turtle (with its two ethernet interfaces) is clearly perfect for that purpose, although I have to figure the best way to do it without
-affecting the functionality of other modules/services that may be running at the same time (some iptables playing needed too).\n\n\           
-In the meantime, please notice that DNS or other well known leaks are NOT being actively prevented. Use it accordingly.\n\n\                  
-TOR Proxy is in $tortle_socksip:$tortle_socksport\n \n" 33 72                                                                                 
-}                                                                                                                                             
-                                                                                                                                              
-                                                                                                                                              
-function start {                                                                                                                              
-        tortlecfg                                                                                                                             
-        if [ ! -e "/usr/sbin/tor" ]; then                                                                                                     
-                opkg update && opkg install tor                                                                                               
-        fi                                                                                                                                    
-        if [ ! -e "/var/lib/tor" ]; then                                                                                                      
-                mkdir -p /var/lib/tor                                                                                                         
-                chown sshd.sshd /var/lib/tor                                                                                                  
-                mkdir -p $tortle_hiddendir                                                                                                    
-                chown sshd.sshd $tortle_hiddendir                                                                                             
-        fi                                                                                                                                    
-        if [ ! -e "$tortle_hiddendir" ]; then                                                                                                 
-                mkdir -p $tortle_hiddendir                                                                                                    
-                 chown sshd.sshd $tortle_hiddendir                                                                                           
-        fi                                                                                                                                    
-                                                                                                                                   
-        (                                                                                                                          
-        echo "User sshd"                                                                                                           
-        echo "RunAsDaemon 1"                                                                                                                
-        echo "PidFile /tmp/run/tor.pid"                                                                                                       
-        echo "DataDirectory /var/lib/tor"                                                                                          
-        echo "SocksPort $tortle_socksip:$tortle_socksport"                                                                         
-        #echo "DNSPort 53"                                                                                                         
-        echo "HiddenServiceDir $tortle_hiddendir"                                                                                           
-        echo "HiddenServicePort $tortle_tport 127.0.0.1:$tortle_lport"                                                                        
-        ) > /tmp/tortlerc                                                                                                                     
-        tor -f /tmp/tortlerc                                                                                                                  
-        echo "$tortle_forwarding" > /proc/sys/net/ipv4/ip_forward                                                                             
-}                                                                                                                                             
-                                                                                                                                              
-                                                                                                                                              
-function stop {                                                                                                                               
-        killall -9 tor                                                                                                                        
-        echo "1" > /proc/sys/net/ipv4/ip_forward                                                                                              
-        echo "Tortle Proxy and Tortle Shell have been stopped."                                                                               
-}                                                                                                                                             
-                                                                                                                                              
-                                                                                                                                              
-function status {                                                                                                                             
-        if pgrep -x tor > /dev/null; then                                                                                                     
-                echo "1"                                                                                                                      
-        else                                                                                                                                  
-                echo "0"                                                                                                                      
-        fi                                                                                                                                    
-}                                                                    
+The LAN Turtle (with its two ethernet interfaces) is clearly perfect for that purpose, although I have to figure the best way to do it without 
+affecting the functionality of other modules/services that may be running at the same time (some iptables playing needed too).\n\n\
+In the meantime, please notice that DNS or other well known leaks are NOT being actively prevented. Use it accordingly.\n\n\
+TOR Proxy is in $tortle_socksip:$tortle_socksport\n \n" 33 72
+}
+
+
+function start {
+	tortlecfg
+	if [ ! -e "/usr/sbin/tor" ]; then
+		opkg update && opkg install tor
+	fi
+	if [ ! -e "/var/lib/tor" ]; then
+		mkdir -p /var/lib/tor
+		chown sshd.sshd /var/lib/tor
+		mkdir -p $tortle_hiddendir
+		chown sshd.sshd $tortle_hiddendir
+	fi
+	if [ ! -e "$tortle_hiddendir" ]; then
+		mkdir -p $tortle_hiddendir                                                                                                    
+		chown sshd.sshd $tortle_hiddendir          	
+	fi
+
+	(
+	echo "User sshd"
+	echo "RunAsDaemon 1"
+	echo "PidFile /tmp/run/tor.pid"
+	echo "DataDirectory /var/lib/tor"
+	echo "SocksPort $tortle_socksip:$tortle_socksport"
+	echo "HiddenServiceDir $tortle_hiddendir"
+	echo "HiddenServicePort $tortle_tport 127.0.0.1:$tortle_lport"
+	echo "VirtualAddrNetworkIPv4 10.192.0.0/10"
+	echo "AutomapHostsOnResolve 1"
+	echo "TransPort 9040"
+	echo "TransListenAddress $tortle_socksip"
+	echo "DNSPort 9053"
+	echo "DNSListenAddress $tortle_socksip"
+	) > /tmp/tortlerc
+	tor -f /tmp/tortlerc
+	if [ "$tortle_forwarding" == "0" ]; then
+		iptables -t nat -A PREROUTING -i br-lan -p tcp --dport 53 -j REDIRECT --to-port 9053
+		iptables -t nat -A PREROUTING -i br-lan -p tcp -j REDIRECT --to-port 9040
+		iptables -t nat -A PREROUTING -i br-lan -p udp --dport 53 -j REDIRECT --to-port 9053
+	fi
+	echo "$tortle_forwarding" > /proc/sys/net/ipv4/ip_forward
+
+}	
+
+
+function stop {
+	killall -9 tor
+	if [ "$(uci get tortle.forwarding)" == "0" ]; then
+		echo "1" > /proc/sys/net/ipv4/ip_forward
+		iptables -t nat -D PREROUTING -i br-lan -p tcp --dport 53 -j REDIRECT --to-port 9053
+		iptables -t nat -D PREROUTING -i br-lan -p tcp -j REDIRECT --to-port 9040           
+		iptables -t nat -D PREROUTING -i br-lan -p udp --dport 53 -j REDIRECT --to-port 9053
+#		iptables -t nat -D PREROUTING 1
+	fi
+	echo "Tortle Proxy and Tortle Shell have been stopped."
+}
+
+
+function status {
+	if pgrep -x tor > /dev/null; then
+		echo "1"	
+	else 
+		echo "0"
+	fi
+}
+
