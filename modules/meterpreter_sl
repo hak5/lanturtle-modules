@@ -32,7 +32,7 @@ function start {
         DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
         [[ "$IP" == "" || "$PORT" == "" ]] && {
         logger "Stageless Meterpreter: Error, configuration blank"
-        echo "Stagelss Meterpreter: Error, configuration blank"
+        echo "Stageless Meterpreter: Error, configuration blank"
         } || {
         while [ ! -f /tmp/killmeterpreter_sl ]; do
         echo "Started Stageless Meterpreter at $DATE with $IP $PORT"
