@@ -44,7 +44,7 @@ logger "Meterpreter: Stopped at $DATE with $IP $PORT"
 }''' > /etc/turtle/meterpreter/meterpreter_exec
 
         echo "/etc/turtle/meterpreter/meterpreter_exec" | at now
-        echo "Stageless Meterpreter started with pid:"
+        echo "Meterpreter started with pid:"
         pidof meterpreter_sl
     fi
  else
