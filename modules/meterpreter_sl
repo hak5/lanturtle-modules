@@ -13,7 +13,7 @@ AUTHOR=IMcPwn
 function start {
   if [ -s /etc/config/meterpreter_sl ]
   then
-    if [ -x /etc/turtle/meterpreter/meterpreter_sl_exec ]
+    if [ -s /etc/turtle/meterpreter/meterpreter_sl_exec ]
     then
         echo "/etc/turtle/meterpreter/meterpreter_sl_exec" | at now
         echo "Stageless Meterpreter started with pid:"
