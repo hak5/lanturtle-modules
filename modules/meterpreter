@@ -12,7 +12,7 @@ CONF=/tmp/meterpreter.form
 function start {
   if [ -s /etc/config/meterpreter ]
   then
-    if [ -x /etc/turtle/meterpreter/meterpreter_exec ]
+    if [ -s /etc/turtle/meterpreter/meterpreter_exec ]
     then
         echo "/etc/turtle/meterpreter/meterpreter_exec" | at now
         echo "Meterpreter started with pid:"
