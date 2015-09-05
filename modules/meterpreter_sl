@@ -19,8 +19,8 @@ function start {
         echo "Stageless Meterpreter started with pid:"
         pidof meterpreter_sl
     else
-        mkdir /etc/turtle/meterpreter
-        rm /etc/turtle/meterpreter/meterpreter_sl_exec
+        mkdir -p /etc/turtle/meterpreter
+        rm -f /etc/turtle/meterpreter/meterpreter_sl_exec
         touch /etc/turtle/meterpreter/meterpreter_sl_exec
         chmod +x /etc/turtle/meterpreter/meterpreter_sl_exec
 
