@@ -18,8 +18,8 @@ function start {
         echo "Meterpreter started with pid:"
         pidof meterpreter
     else
-        mkdir /etc/turtle/meterpreter
-        rm /etc/turtle/meterpreter/meterpreter_exec
+        mkdir -p /etc/turtle/meterpreter
+        rm -f /etc/turtle/meterpreter/meterpreter_exec
         touch /etc/turtle/meterpreter/meterpreter_exec
         chmod +x /etc/turtle/meterpreter/meterpreter_exec
 
