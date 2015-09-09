@@ -1,0 +1,225 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+VERSION="0.8"
+DESCRIPTION="TORtle - TOR Turtle Gateway + TOR hidden SHELL/Service"
+AUTHOR="Shad"
+CONF="/tmp/tortle.form"
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ITEM_HELP=4}
+: ${DIALOG_ESC=255}
+
+function tortlecfg {
+	if [ "$(uci get tortle.version)" != "0.8" ]; then
+		rm /etc/config/tortle
+	fi
+	if [ ! -e "/etc/config/tortle" ]; then
+		touch /etc/config/tortle
+		uci set tortle.version="0.8"
+		uci set tortle.enableproxy="1"
+		uci set tortle.enabletrans="1"
+		uci set tortle.transport="9040"
+		uci set tortle.socksip="172.16.84.1"   # deprecated
+		uci set tortle.socksport="5090"
+		uci set tortle.tport="22"
+		uci set tortle.lport="22"
+		uci set tortle.forwarding="1"
+		uci set tortle.enablehidden="1"
+		uci set tortle.hiddendir="/etc/tor/hidden"
+		uci set tortle.enablehidden2="0"
+		uci set tortle.hiddendir2="etc/tor/hidden2"
+		uci set tortle.dnsport="9053"
+		uci set tortle.enablecontrol="0"
+		uci set tortle.controlport="9051"
+		uci set tortle.controladdr="172.16.84.1"	# deprecated
+		uci set tortle.hashedpass="16:D2237CB1DA58774A60EF13100BEFEDE024F5C49BA674CE2BEA1032EC38"	# default: test
+		uci set tortle.gateway="0"
+		uci commit tortle
+        fi
+
+	tortle_tport="$(uci get tortle.tport)"			# * customizable
+	tortle_lport="$(uci get tortle.lport)"			# * customizable
+	tortle_socksip="$(uci get network.lan.ipaddr)"  	# Use network.lan.ipaddr
+	tortle_socksport="$(uci get tortle.socksport)"		# Use standard default
+	tortle_forwarding="$(uci get tortle.forwarding)" 	# * customizable 
+	tortle_enablehidden="$(uci get tortle.enablehidden)"	# * customizable
+	tortle_hiddendir="$(uci get tortle.hiddendir)"		# 
+	tortle_enablehidden2="$(uci get tortle.enablehidden2)"	# Reserved for future use
+	tortle_hiddendir2="$(uci get tortle.hiddendir2)"	# Reserved for future use
+	tortle_dnsport="$(uci get tortle.dnsport)"		# Use standard default
+	tortle_enableproxy="$(uci get tortle.enableproxy)"	# * customizable
+	tortle_enabletrans="$(uci get tortle.enabletrans)"	# * customizable
+	tortle_transport="$(uci get tortle.transport)"		# Use standard default
+	tortle_enablecontrol="$(uci get tortle.enablecontrol)"	# * customizable
+	tortle_controlport="$(uci get tortle.controlport)"	# Use standard default
+	tortle_controladdr="$(uci get network.lan.ipaddr)"	# Use network.lan.ipaddr
+	tortle_hashedpass="$(uci get tortle.hashedpass)"	# * customizable
+	tortle_gateway="$(uci get tortle.gateway)"		# * customizable
+	tortle_version="$(uci get tortle.version)"
+
+	if [ -e "$tortle_hiddendir/hostname" ]; then
+		tortle_hostname="$(cat $tortle_hiddendir/hostname)"
+		uci set tortle.hostname="$tortle_hostname"
+		uci commit tortle
+	else
+	        tortle_hostname="--Please first START TORtle to generate an Onion address--"
+	fi
+}
+
+function configure {
+tortlecfg
+
+dialog --ok-label "Submit" \
+    --help-button \
+    --title "TORtle Configuration" \
+    --form "Gateway + TOR Hidden Service configuration\n\n\
+TORGateway, if enabled, automatically and conveniently tunnels ALL eth0 traffic through TOR Transparent Proxy.\n\n\
+Onion Host sets up a hidden service inside the TOR network. By default it is a TORShell (SSH within TOR)\n\n\
+TOR Proxy is just the regular SOCKS proxy through TOR.\n\
+Forwarding enables/disables LAN Turtle IP forwarding to help prevent leaks for Proxy mode.\n \n" 26 60 7\
+        "Onion Host Enable:       ($tortle_hostname)"	1 1     "$tortle_enablehidden"  1 20 5 0 \
+	"    External Port:"	2 1	"$tortle_tport"   	2 20 5 0 \
+    	"       Local Port:"	3 1	"$tortle_lport"		3 20 5 0 \
+	"TOR Proxy  Enable:"   4 1     "$tortle_enableproxy"   4 20 5 0 \
+	"TransProxy Enable:"	5 1	"$tortle_enabletrans"	5 20 5 0 \
+	"TORGateway Enable:" 	6 1	"$tortle_gateway"	6 20 5 0 \
+	"Forwarding Enable:"   7 1     "$tortle_forwarding"    7 20 5 0 \
+  2>$CONF
+
+  return=$?
+
+  case $return in
+    $DIALOG_OK)
+      cat $CONF | { 
+	read -r tortle_enablehidden
+        read -r tortle_tport
+        read -r tortle_lport
+	read -r tortle_enableproxy
+	read -r tortle_enabletrans
+	read -r tortle_gateway
+	read -r tortle_forwarding
+
+	uci set tortle.enablehidden="$tortle_enablehidden"
+	uci set tortle.tport="$tortle_tport"
+        uci set tortle.lport="$tortle_lport"
+        uci set tortle.enableproxy="$tortle_enableproxy"
+        uci set tortle.enabletrans="$tortle_enabletrans"
+	uci set tortle.gateway="$tortle_gateway"
+	uci set tortle.forwarding="$tortle_forwarding"
+        uci commit tortle
+        rm $CONF
+      };;
+    $DIALOG_CANCEL)
+      rm $CONF
+      clear
+      exit;;
+    $DIALOG_HELP)
+      dialog --title "Help" \
+        --msgbox "\
+                     TORtle V$tortle_version\n\n\
+TOR SHELL\n\
+=========\n\
+Hostname: $tortle_hostname\n\
+TOR Port: $tortle_tport (Redirected to localhost:$tortle_lport)\n\
+\n
+TOR GATEWAY\n\
+===========\n\
+TOR Proxy is at $tortle_socksip:$tortle_socksport\n\
+TOR Transport is at $tortle_socksip:$tortle_transport\n\
+TOR Dnsport is $tortle_dnsport\n\
+\n\n\n\
+For support, please use the LAN Turtle forum at:\n\n\
+https://forums.hak5.org/index.php?/forum/88-lan-turtle/\n\n\
+I need YOUR feedback to help me improve TORtle!\n\n\
+                                        - Shad.\n" 27 60
+      configure
+      ;;
+    $DIALOG_ESC)
+      clear;;
+  esac
+}
+
+function start {
+	tortlecfg
+	if [ ! -e "/usr/sbin/tor" ]; then
+		opkg update && opkg install tor
+	fi
+	if [ ! -e "/var/lib/tor" ]; then
+		(
+		mkdir -p /var/lib/tor 
+		chown sshd.sshd /var/lib/tor 
+		mkdir -p $tortle_hiddendir 
+		chown sshd.sshd $tortle_hiddendir
+		) 2> /dev/null
+	fi
+	if [ ! -e "$tortle_hiddendir" ]; then
+		(
+		mkdir -p $tortle_hiddendir
+		chown sshd.sshd $tortle_hiddendir          	
+		) 2> /dev/null
+	fi
+
+	(
+	echo "User sshd"
+	echo "RunAsDaemon 1"
+	echo "PidFile /var/run/tor.pid"
+	echo "DataDirectory /var/lib/tor"
+	if [ "$tortle_enableproxy" == "1" ]; then
+		echo "SocksPort $tortle_socksip:$tortle_socksport"
+	fi
+	if [ "$tortle_enablehidden" == "1" ]; then
+		echo "HiddenServiceDir $tortle_hiddendir"
+		echo "HiddenServicePort $tortle_tport 127.0.0.1:$tortle_lport"
+	fi
+	if [ "$tortle_enabletrans" == "1" ]; then
+		echo "VirtualAddrNetworkIPv4 10.192.0.0/10"
+		echo "AutomapHostsOnResolve 1"
+		echo "TransPort $tortle_transport"
+		echo "TransListenAddress $tortle_socksip"
+		echo "DNSPort $tortle_dnsport"
+		echo "DNSListenAddress $tortle_socksip"
+	fi
+	if [ "$tortle_enablecontrol" == "1" ]; then
+		echo "ControlListenAddress $tortle_controladdr"
+		echo "ControlPort $tortle_controlport"
+		echo "HashedControlPassword $tortle_hashedpass"
+	fi
+	) > /tmp/tortlerc
+	tor -f /tmp/tortlerc
+	if [ "$tortle_gateway" == "1" ]; then
+		iptables -t nat -A PREROUTING -i br-lan -p udp --dport 53 -j REDIRECT --to-port $tortle_dnsport
+		iptables -t nat -A PREROUTING -i br-lan -p tcp --dport 53 -j REDIRECT --to-port $tortle_dnsport
+		iptables -t nat -A PREROUTING -i br-lan -p tcp --dest $tortle_socksip -j ACCEPT
+		# Should I add here a rule to allow reaching eth1 network? Perhaps... but is it secure?
+		iptables -t nat -A PREROUTING -i br-lan -p tcp -j REDIRECT --to-port $tortle_transport
+	fi
+	echo "$tortle_forwarding" > /proc/sys/net/ipv4/ip_forward
+
+}	
+
+
+function stop {
+	tortlecfg
+	killall -9 tor
+#	if [ "$tortle_gateway" == "1" ]; then
+	(
+		iptables -t nat -D PREROUTING -i br-lan -p udp --dport 53 -j REDIRECT --to-port $tortle_dnsport
+		iptables -t nat -D PREROUTING -i br-lan -p tcp --dport 53 -j REDIRECT --to-port $tortle_dnsport
+		iptables -t nat -D PREROUTING -i br-lan -p tcp --dest $tortle_socksip -j ACCEPT
+		iptables -t nat -D PREROUTING -i br-lan -p tcp -j REDIRECT --to-port $tortle_transport
+	) 2> /dev/null
+#	fi
+	echo "1" > /proc/sys/net/ipv4/ip_forward
+	echo "All TORtle services and redirections have been disabled."
+}
+
+
+function status {
+	if pgrep -x tor > /dev/null; then
+		echo "1"	
+	else 
+		echo "0"
+	fi
+}
