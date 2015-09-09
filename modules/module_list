@@ -18,3 +18,4 @@ urlsnarf Sniffs HTTP URL traffic
 clomac Clone Clients MAC address into WAN interface
 upnp-portfwd uPnP Port Forwarding
 ddnsc Dynamic Domain Name Service
+tortle TOR Turtle Gateway TOR hidden SHELL Service
