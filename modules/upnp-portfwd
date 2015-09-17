@@ -60,7 +60,7 @@ uPnP Portfwd is a service which provides automatic port forwarding when connecte
 convenient and persistent DIRECT shell from the outside into the LAN Turtle so that a remote "proxy" server or host is not needed.\n*IF* the router is uPnP enabled
 and forwards the port it would be possible to connect directly to the Turtle from any arbitrary/anonymous location, even from TOR.\n \n
 Remote Port - External port on the router to be forwarded to the Turtle.\n \n\
-Local Port - The port where a local service is running in the Turtle (Tipically 22 -ssh-)\n \n\
+Local Port - The port where a local service is running in the Turtle (Typically 22 -ssh-)\n \n\
 Protocol - TCP or UDP (tcp for ssh)\n \n\
 Example: Per the defaults, the router will forward its external port 45000 to the LAN Turtle port 22. In this scenario one may establish a direct connection to the 
 LAN Turtle by ssh'ing into the router's external interface port 45000: ssh -p 45000 root@external.router.ip \n \n
