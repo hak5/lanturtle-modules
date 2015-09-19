@@ -77,7 +77,7 @@ function configure {
     --help-button \
     --title "Responder Configuration" \
     --radiolist "\n\
-For information on the different log files, see "Help"\n\nNOTICE: The first time you run this module it may take a long time to load because of dependencies. Please let it finish.\n\nThe log files can be saved to SSHFS or /tmp.\n" 16 60 3\
+For information on the different log files, see Help\n\nNOTICE: The first time you run this module it may take a long time to load because of dependencies. Please let it finish.\n\nThe log files can be saved to SSHFS or /tmp.\n" 16 60 3\
     1 "Save log to SSHFS if available." off\
     2 "Save log to /tmp/" off\
   2>$CONF
