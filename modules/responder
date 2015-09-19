@@ -33,7 +33,7 @@ if [ -s /etc/config/responder ];
           if [ -s /etc/turtle/Responder/Responder.db ]; then
             rm -r /etc/turtle/Responder/Responder.db
           fi
-          if [ $(readlink /etc/turtle/Responder/logs) ! == "/sshfs/Responder/logs" ]; then
+          if [ $(readlink /etc/turtle/Responder/logs) != "/sshfs/Responder/logs" ]; then
             rm -r /etc/turtle/Responder/logs
             mkdir -p /sshfs/Responder/logs
             ln -s /sshfs/Responder/logs /etc/turtle/Responder/logs
@@ -48,7 +48,7 @@ if [ -s /etc/config/responder ];
         if [ -s /etc/turtle/Responder/Responder.db ]; then
           rm -r /etc/turtle/Responder/Responder.db
         fi
-        if [ $(readlink /etc/turtle/Responder/logs) ! == "/tmp/Responder/logs" ]; then
+        if [ $(readlink /etc/turtle/Responder/logs) != "/tmp/Responder/logs" ]; then
           rm -r /etc/turtle/Responder/logs
           mkdir -p /tmp/Responder/logs
           ln -s /tmp/Responder/logs /etc/turtle/Responder/logs
