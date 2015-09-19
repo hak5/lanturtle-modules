@@ -12,7 +12,7 @@ AUTHOR=IMcPwn
 
 function start {
   if [ ! -s /usr/bin/git ]; then
-     opkg update && opkg install git 
+     opkg update && opkg install git
   fi
   
   if [ ! -s /usr/lib/python2.7/sqlite3/dbapi2.py ]; then
@@ -30,10 +30,14 @@ if [ -s /etc/config/responder ];
     case $responder_log in
       sshfs)
         if pgrep sshfs > /dev/null; then 
-          echo "SSHFS Running"
-          rm -r /etc/turtle/Responder/logs
-          mkdir -p /sshfs/Responder/logs
-          ln -s /sshfs/Responder/logs /etc/turtle/Responder/logs
+          if [ -s /etc/turtle/Responder/Responder.db ]; then
+		      rm -r /etc/turtle/Responder/Responder.db
+		    fi
+		    if [ $(readlink /etc/turtle/Responder/logs) != "/sshfs/Responder/logs" ]; then
+            rm -r /etc/turtle/Responder/logs
+            mkdir -p /sshfs/Responder/logs
+	          ln -s /sshfs/Responder/logs /etc/turtle/Responder/logs
+		    fi
           echo "python /etc/turtle/Responder/Responder.py -I br-lan" | at now
           echo responder started and logs are being saved to /sshfs/Responder/logs
         else 
@@ -41,11 +45,16 @@ if [ -s /etc/config/responder ];
         fi
         ;;
       tmp)
-        rm -r /etc/turtle/Responder/logs
-        mkdir -p /tmp/Responder/logs
-        ln -s /tmp/Responder/logs /etc/turtle/Responder/logs
-        echo "python /etc/turtle/Responder/Responder.py -I br-lan" | at now
-        echo responder started and logs are being saved to /tmp/Responder/logs
+	      if [ -s /etc/turtle/Responder/Responder.db ]; then
+		      rm -r /etc/turtle/Responder/Responder.db
+		    fi
+		    if [ $(readlink /etc/turtle/Responder/logs) != "/tmp/Responder/logs" ]; then
+          rm -r /etc/turtle/Responder/logs
+          mkdir -p /tmp/Responder/logs
+	        ln -s /tmp/Responder/logs /etc/turtle/Responder/logs
+		    fi
+          echo "python /etc/turtle/Responder/Responder.py -I br-lan" | at now
+          echo responder started and logs are being saved to /tmp/Responder/logs
         ;;
     esac
   else
