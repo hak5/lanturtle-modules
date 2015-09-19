@@ -31,25 +31,21 @@ if [ -s /etc/config/responder ];
       sshfs)
         if pgrep sshfs > /dev/null; then 
           echo "SSHFS Running"
-          if [[ ! -L /etc/turtle/Responder/logs || ! -L /sshfs/Responder/logs ]]; then
-            rm -r /etc/turtle/Responder/logs
-            mkdir -p /sshfs/Responder/logs
-            ln -s /sshfs/Responder/logs /etc/turtle/Responder/logs
-            echo "python /etc/turtle/Responder/Responder.py -I br-lan" | at now
-            echo responder started and logs are being saved to /sshfs/Responder/logs
-          fi 
+          rm -r /etc/turtle/Responder/logs
+          mkdir -p /sshfs/Responder/logs
+          ln -s /sshfs/Responder/logs /etc/turtle/Responder/logs
+          echo "python /etc/turtle/Responder/Responder.py -I br-lan" | at now
+          echo responder started and logs are being saved to /sshfs/Responder/logs
         else 
           echo "SSHFS not running"
         fi
         ;;
       tmp)
-	if [[ ! -L /etc/turtle/Responder/logs || ! -L /tmp/Responder/logs ]]; then
-            rm -r /etc/turtle/Responder/logs
-            mkdir -p /tmp/Responder/logs
-            ln -s /tmp/Responder/logs /etc/turtle/Responder/logs
-            echo "python /etc/turtle/Responder/Responder.py -I br-lan" | at now
-            echo responder started and logs are being saved to /tmp/Responder/logs
-	fi
+        rm -r /etc/turtle/Responder/logs
+        mkdir -p /tmp/Responder/logs
+        ln -s /tmp/Responder/logs /etc/turtle/Responder/logs
+        echo "python /etc/turtle/Responder/Responder.py -I br-lan" | at now
+        echo responder started and logs are being saved to /tmp/Responder/logs
         ;;
     esac
   else
