@@ -77,7 +77,7 @@ function configure {
     --help-button \
     --title "Responder Configuration" \
     --radiolist "\n\
-Responder is an LLMNR, NBT-NS and MDNS poisoner.\n\nNOTICE: The first time you run this module it may take a long time to load. Please let it finish.\n\nThe log files can be saved to SSHFS or /tmp.\n" 16 60 3\
+For information on the different log files, see "Help"\n\nNOTICE: The first time you run this module it may take a long time to load because of dependencies. Please let it finish.\n\nThe log files can be saved to SSHFS or /tmp.\n" 16 60 3\
     1 "Save log to SSHFS if available." off\
     2 "Save log to /tmp/" off\
   2>$CONF
@@ -105,11 +105,16 @@ Responder is an LLMNR, NBT-NS and MDNS poisoner.\n\nNOTICE: The first time you r
     $DIALOG_HELP)
       dialog --title "Help" \
         --msgbox "\
-Responder an LLMNR, NBT-NS and MDNS poisoner. It will answer to specific NBT-NS (NetBIOS Name Service) queries based on their name suffix (see: http://support.microsoft.com/kb/163409).\n\
+Responder is an LLMNR, NBT-NS and MDNS poisoner. It will answer to specific NBT-NS (NetBIOS Name Service) queries based on their name suffix (see: http://support.microsoft.com/kb/163409).\n\
 By default, the tool will only answer to File Server Service request, which is for SMB.\n\n\
 The concept behind this is to target our answers, and be stealthier on the network. This also helps to ensure that we don't break legitimate NBT-NS behavior.\n\n\
+All activity will be logged to Responder-Session.log\n\
+Analyze mode will be logged to Analyze-Session.log\n\
+Poisoning will be logged to Poisoners-Session.log\n\n\
+All hashes are dumped an unique file John Jumbo compliant, using this format:\n\
+(MODULE_NAME)-(HASH_TYPE)-(CLIENT_IP).txt\n\n\
 For more information, see: https://github.com/SpiderLabs/Responder\n\
-" 20 60
+" 25 60
       configure
       ;;
     $DIALOG_ESC)
