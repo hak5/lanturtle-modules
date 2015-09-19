@@ -31,13 +31,13 @@ if [ -s /etc/config/responder ];
       sshfs)
         if pgrep sshfs > /dev/null; then 
           if [ -s /etc/turtle/Responder/Responder.db ]; then
-		      rm -r /etc/turtle/Responder/Responder.db
-		    fi
-		    if [ $(readlink /etc/turtle/Responder/logs) != "/sshfs/Responder/logs" ]; then
+            rm -r /etc/turtle/Responder/Responder.db
+          fi
+          if [ $(readlink /etc/turtle/Responder/logs) != "/sshfs/Responder/logs" ]; then
             rm -r /etc/turtle/Responder/logs
             mkdir -p /sshfs/Responder/logs
-	          ln -s /sshfs/Responder/logs /etc/turtle/Responder/logs
-		    fi
+            ln -s /sshfs/Responder/logs /etc/turtle/Responder/logs
+          fi
           echo "python /etc/turtle/Responder/Responder.py -I br-lan" | at now
           echo responder started and logs are being saved to /sshfs/Responder/logs
         else 
@@ -45,14 +45,14 @@ if [ -s /etc/config/responder ];
         fi
         ;;
       tmp)
-	      if [ -s /etc/turtle/Responder/Responder.db ]; then
-		      rm -r /etc/turtle/Responder/Responder.db
-		    fi
-		    if [ $(readlink /etc/turtle/Responder/logs) != "/tmp/Responder/logs" ]; then
+        if [ -s /etc/turtle/Responder/Responder.db ]; then
+          rm -r /etc/turtle/Responder/Responder.db
+        fi
+        if [ $(readlink /etc/turtle/Responder/logs) != "/tmp/Responder/logs" ]; then
           rm -r /etc/turtle/Responder/logs
           mkdir -p /tmp/Responder/logs
-	        ln -s /tmp/Responder/logs /etc/turtle/Responder/logs
-		    fi
+          ln -s /tmp/Responder/logs /etc/turtle/Responder/logs
+        fi
           echo "python /etc/turtle/Responder/Responder.py -I br-lan" | at now
           echo responder started and logs are being saved to /tmp/Responder/logs
         ;;
