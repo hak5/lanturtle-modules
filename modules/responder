@@ -14,6 +14,10 @@ function start {
   if [ ! -s /usr/bin/git ]; then
      opkg update && opkg install git 
   fi
+  
+  if [ ! -s /usr/lib/python2.7/sqlite3/dbapi2.py ]; then
+     opkg update && opkg install python-sqlite3
+  fi
 
   if [[ ! -d /etc/turtle/Responder || ! -s /etc/turtle/Responder/Responder.py ]]; then
       rm -r /etc/turtle/Responder
@@ -28,11 +32,11 @@ if [ -s /etc/config/responder ];
         if pgrep sshfs > /dev/null; then 
           echo "SSHFS Running"
           if [[ ! -L /etc/turtle/Responder/logs || ! -L /sshfs/Responder/logs ]]; then
-		rm -r /etc/turtle/Responder/logs
-		mkdir -p /sshfs/Responder/logs
-		ln -s /sshfs/Responder/logs /etc/turtle/Responder/logs
-                echo "python /etc/turtle/Responder/Responder.py -I br-lan" | at now
-  		echo responder started and logs are being saved to /sshfs
+            rm -r /etc/turtle/Responder/logs
+            mkdir -p /sshfs/Responder/logs
+            ln -s /sshfs/Responder/logs /etc/turtle/Responder/logs
+            echo "python /etc/turtle/Responder/Responder.py -I br-lan" | at now
+            echo responder started and logs are being saved to /sshfs
           fi 
         else 
           echo "SSHFS not running"
@@ -40,11 +44,11 @@ if [ -s /etc/config/responder ];
         ;;
       tmp)
 	if [[ ! -L /etc/turtle/Responder/logs || ! -L /tmp/Responder/logs ]]; then
-        	rm -r /etc/turtle/Responder/logs
-		mkdir -p /tmp/Responder/logs
-		ln -s /tmp/Responder/logs /etc/turtle/Responder/logs
-                echo "python /etc/turtle/Responder/Responder.py -I br-lan" | at now
-  		echo responder started and logs are being saved to /tmp
+            rm -r /etc/turtle/Responder/logs
+            mkdir -p /tmp/Responder/logs
+            ln -s /tmp/Responder/logs /etc/turtle/Responder/logs
+            echo "python /etc/turtle/Responder/Responder.py -I br-lan" | at now
+            echo responder started and logs are being saved to /tmp
 	fi
         ;;
     esac
