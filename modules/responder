@@ -11,21 +11,21 @@ AUTHOR=IMcPwn
 : ${DIALOG_ESC=255}
 
 function start {
-  if [[ ! $(opkg list-installed | grep git) ]]; then
-     opkg update && opkg install git
-  fi
-  
-  if [[ ! $(opkg list-installed | grep python-sqlite3) ]]; then
-     opkg update && opkg install python-sqlite3
-  fi
-
-  if [[ ! -d /etc/turtle/Responder || ! -s /etc/turtle/Responder/Responder.py ]]; then
-      rm -r /etc/turtle/Responder
-      git clone git://github.com/SpiderLabs/Responder /etc/turtle/Responder
-  fi
-
-if [ -s /etc/config/responder ];
+  if [ -s /etc/config/responder ];
   then
+    if [[ ! $(opkg list-installed | grep git) ]]; then
+      opkg update && opkg install git
+    fi
+  
+    if [[ ! $(opkg list-installed | grep python-sqlite3) ]]; then
+      opkg update && opkg install python-sqlite3
+    fi
+
+    if [[ ! -d /etc/turtle/Responder || ! -s /etc/turtle/Responder/Responder.py ]]; then
+        rm -r /etc/turtle/Responder
+        git clone git://github.com/SpiderLabs/Responder /etc/turtle/Responder
+    fi
+    
     responder_log=$(uci get responder.log)
     case $responder_log in
       sshfs)
@@ -82,7 +82,7 @@ function configure {
     --help-button \
     --title "Responder Configuration" \
     --radiolist "\n\
-For information on the different log files, see Help\n\nNOTICE: The first time you run this module it may take a long time to load because of dependencies. Please let it finish.\n\nThe log files can be saved to SSHFS or /tmp.\n" 16 60 3\
+Responder will listen on a variety of ports to gather credentials. See Help for more information.\n\nNote: the first time you run this module it may take a long time to load because of dependencies.\n\nThe log files can be saved to SSHFS or tmp.\n" 16 60 3\
     1 "Save log to SSHFS if available." off\
     2 "Save log to /tmp/" off\
   2>$CONF
@@ -118,7 +118,7 @@ Analyze mode will be logged to Analyze-Session.log\n\
 Poisoning will be logged to Poisoners-Session.log\n\n\
 All hashes are dumped an unique file John Jumbo compliant, using this format:\n\
 (MODULE_NAME)-(HASH_TYPE)-(CLIENT_IP).txt\n\n\
-For more information, see: https://github.com/SpiderLabs/Responder\n\
+For even more information, see: https://github.com/SpiderLabs/Responder\n\
 " 25 60
       configure
       ;;
