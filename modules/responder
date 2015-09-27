@@ -11,11 +11,11 @@ AUTHOR=IMcPwn
 : ${DIALOG_ESC=255}
 
 function start {
-  if [ ! -s /usr/bin/git ]; then
+  if [[ ! $(opkg list-installed | grep git) ]]; then
      opkg update && opkg install git
   fi
   
-  if [ ! -s /usr/lib/python2.7/sqlite3/dbapi2.py ]; then
+  if [[ ! $(opkg list-installed | grep python-sqlite3) ]]; then
      opkg update && opkg install python-sqlite3
   fi
 
