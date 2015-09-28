@@ -215,7 +215,7 @@ Poisoning will be logged to Poisoners-Session.log\n\n\
 All hashes are dumped an unique file John Jumbo compliant, using this format:\n\
 (MODULE_NAME)-(HASH_TYPE)-(CLIENT_IP).txt\n\n\
 " 18 72
-configure
+log
   esac
 }
 
@@ -311,7 +311,7 @@ By default, the tool will only answer to File Server Service request, which is f
 The concept behind this is to target our answers, and be stealthier on the network. This also helps to ensure that we don't break legitimate NBT-NS behavior.\n\n\
 For more information, see: https://github.com/SpiderLabs/Responder\n\
 " 18 72
-configure
+log
   esac
 }
 
@@ -339,11 +339,11 @@ function configure {
   fi
 
   dialog --title "" --menu "" 15 60 5 \
-    "log"	"Specify log location" \
-    "interface"   "Specify interface to target" \
-    "mode"       "Specify Responder mode" \
+    "log"	      "Specify log location" \
+    "interface"       "Specify interface to target" \
+    "mode"            "Specify Responder mode" \
     "responderconf"   "Edit Responder.conf" \
-    "back"      "Return to previous menu" 2> $CONF
+    "back"            "Return to previous menu" 2> $CONF
   result=$(cat $CONF && rm $CONF &>/dev/null)
   case $result in
     "log") log;;
