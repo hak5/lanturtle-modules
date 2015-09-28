@@ -192,11 +192,11 @@ The log files can be saved to SSHFS or tmp.\n" 16 60 3\
     $DIALOG_OK)
       LOG=$(cat $CONF)
       case $LOG in
-        1)
+	1)
           uci set responder.log="sshfs"
           uci commit responder
           ;;
-        2)
+	2)
           uci set responder.log="tmp"
           uci commit responder
           ;;
@@ -232,11 +232,11 @@ Responder can target the Host machine (The computer the LAN Turtle is plugged in
     $DIALOG_OK)
       INTERFACE=$(cat $CONF)
       case $INTERFACE in
-        1)
+	1)
           uci set responder.interface="br-lan"
           uci commit responder
           ;;
-        2)
+	2)
           uci set responder.interface="eth1"
           uci commit responder
           ;;
@@ -255,7 +255,7 @@ function mode {
     --title "Responder Mode" \
 	--help-button \
     --radiolist "Choose mode\n \n" 20 60 10\
-	1 "Default mode" on\
+    1 "Default mode" on\
     2 "Analyze mode" off\
     3 "Start WPAD rouge proxy server" off\
     4 "Enable answers for netbios suffix queries" off\
@@ -270,28 +270,28 @@ function mode {
     $DIALOG_OK)
       mode=$(cat $CONF)
       case $mode in
-        1)
+	1)
           uci set responder.mode="1"
           uci commit responder;;
-        2)
+	2)
           uci set responder.mode="2"
           uci commit responder;;
-        3)
+	3)
           uci set responder.mode="3"
           uci commit responder;;
-        4)
+	4)
           uci set responder.mode="4"
           uci commit responder;;
-        5)
+	5)
           uci set responder.mode="5"
           uci commit responder;;
-        6)
+	6)
           uci set responder.mode="6"
           uci commit responder;;
-        7)
+	7)
           uci set responder.mode="7"
           uci commit responder;;
-        8)
+	8)
           uci set responder.mode="8"
           uci commit responder;;
 	9)
@@ -333,10 +333,10 @@ dialog \
 }
 
 function configure {
-  if [[ ! -s /etc/config/responder ]];
-  then
-    touch /etc/config/responder
-  fi
+if [[ ! -s /etc/config/responder ]];
+then
+	touch /etc/config/responder
+fi
 
   dialog --title "" --menu "" 15 60 5 \
     "log"	      "Specify log location" \
