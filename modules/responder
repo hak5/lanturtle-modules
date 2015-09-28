@@ -294,7 +294,7 @@ function mode {
         8)
           uci set responder.mode="8"
           uci commit responder;;
-		8)
+	9)
           uci set responder.mode="9"
           uci commit responder;;
       esac
