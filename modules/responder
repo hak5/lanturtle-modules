@@ -311,7 +311,7 @@ By default, the tool will only answer to File Server Service request, which is f
 The concept behind this is to target our answers, and be stealthier on the network. This also helps to ensure that we don't break legitimate NBT-NS behavior.\n\n\
 For more information, see: https://github.com/SpiderLabs/Responder\n\
 " 18 72
-log
+mode
   esac
 }
 
