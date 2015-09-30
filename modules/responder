@@ -203,7 +203,7 @@ The log files can be saved to SSHFS or tmp.\n" 16 60 3\
   esac
   configure
     ;;
-	$DIALOG_CANCEL)
+    $DIALOG_CANCEL)
       configure;;
     $DIALOG_ESC)
       configure;;
@@ -243,7 +243,7 @@ Responder can target the Host machine (The computer the LAN Turtle is plugged in
       esac
 	  configure
     ;;
-	$DIALOG_CANCEL)
+    $DIALOG_CANCEL)
       configure;;
     $DIALOG_ESC)
       configure;;
@@ -317,9 +317,9 @@ mode
 
 function responderconf {
 dialog \
+    --help-button \
     --title "Editing: /etc/turtle/Responder/Responder.conf" \
     --editbox /etc/turtle/Responder/Responder.conf 18 72\
-	--help-button \
   2>$CONF
   return=$?
   case $return in
@@ -327,9 +327,22 @@ dialog \
       cat $CONF | {
         cat $CONF > /etc/turtle/Responder/Responder.conf
         rm $CONF
+        configure
       };;
-	  esac
-	  configure
+    $DIALOG_HELP)
+      dialog --title "Help" \
+        --msgbox "For information on this configuration, see: https://github.com/SpiderLabs/Responder" 20 60
+      responderconf
+      ;;
+    $DIALOG_CANCEL)
+      rm $CONF
+      configure
+      ;;
+    $DIALOG_ESC)
+      rm $CONF
+      configure
+      ;;
+  esac
 }
 
 function configure {
