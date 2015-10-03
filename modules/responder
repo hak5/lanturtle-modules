@@ -1,5 +1,5 @@
 #!/bin/bash /usr/lib/turtle/turtle_module
-VERSION="2.0"
+VERSION="2.1"
 DESCRIPTION="Responder - LLMNR, NBT-NS and MDNS poisoner"
 CONF=/tmp/responder.form
 AUTHOR=IMcPwn
@@ -141,6 +141,10 @@ function start {
 				echo "python /etc/turtle/Responder/Responder.py $mode -I $responder_interface" | at now
 				echo "Responder started and logs are being saved to /tmp/Responder"
 				;;
+			*)
+				echo "Responder configuration not valid. Please re-configure then try again."
+				rm -r /etc/config/responder
+				exit 1
 		esac
 	else
 		echo "Responder not configured."
@@ -181,6 +185,8 @@ function status {
 function log {
 dialog --ok-label "Submit" \
     --title "Responder Log Configuration" \
+	--extra-button \
+	--extra-label "View log" \
 	--help-button \
     --radiolist "\n\
 The log files can be saved to SSHFS or tmp.\n" 16 60 3\
@@ -207,6 +213,20 @@ The log files can be saved to SSHFS or tmp.\n" 16 60 3\
       configure;;
     $DIALOG_ESC)
       configure;;
+	$DIALOG_EXTRA)
+		responder_log=$(uci get responder.log)
+		case $responder_log in
+			sshfs)
+				dialog --title "/sshfs/Responder/logs/Responder-Session.log" --clear --tailbox "/sshfs/Responder/logs/Responder-Session.log" 18 72
+				;;
+			tmp)
+				dialog --title "/tmp/Responder/logs/Responder-Session.log" --clear --tailbox "/tmp/Responder/logs/Responder-Session.log" 18 72
+				;;
+			*)
+				echo "Responder log location not configured."
+				log;;
+		esac
+		log;;
 	$DIALOG_HELP)
 		dialog --title "Help" --msgbox "\n\
 All activity will be logged to Responder-Session.log\n\
