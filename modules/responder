@@ -1,5 +1,5 @@
 #!/bin/bash /usr/lib/turtle/turtle_module
-VERSION="2.1"
+VERSION="2.2"
 DESCRIPTION="Responder - LLMNR, NBT-NS and MDNS poisoner"
 CONF=/tmp/responder.form
 AUTHOR=IMcPwn
@@ -49,8 +49,8 @@ function start {
 		
 		if [[ ! -d /etc/turtle/Responder || ! -s /etc/turtle/Responder/Responder.py || ! -s /etc/turtle/Responder/Responder.conf ]];
 		then
-			rm -r /etc/turtle/Responder
-			echo "Responder not downloaded. Downloading..."
+			rm -rf /etc/turtle/Responder
+			echo "Responder not downloaded or corrupted. Downloading..."
 			git clone git://github.com/SpiderLabs/Responder /etc/turtle/Responder
 		fi
 		
@@ -64,6 +64,12 @@ function start {
 			7) mode="-v";;
 			8) mode="-r -F";;
 			9) mode="-r -F -f";;
+			*)
+				echo "Responder configuration not valid."
+				echo "Please re-configure then try again."
+				rm -f /etc/config/responder
+				exit 1
+				;;
 		esac
 	
 		case $responder_log in
@@ -91,12 +97,12 @@ function start {
 					
 					if [ -s /etc/turtle/Responder/Responder.db ]; 
 					then
-						rm -r /etc/turtle/Responder/Responder.db
+						rm -f /etc/turtle/Responder/Responder.db
 					fi
 					
 					if [[ $(readlink /etc/turtle/Responder/logs) != "/sshfs/Responder/logs" || ! -d /sshfs/Responder/logs ]]; 
 					then
-						rm -r /etc/turtle/Responder/logs
+						rm -rf /etc/turtle/Responder/logs
 						mkdir -p /sshfs/Responder/logs
 						ln -s /sshfs/Responder/logs /etc/turtle/Responder/logs
 					fi
@@ -129,11 +135,11 @@ function start {
 				
 				if [ -s /etc/turtle/Responder/Responder.db ]; 
 				then
-					rm -r /etc/turtle/Responder/Responder.db
+					rm -f /etc/turtle/Responder/Responder.db
 				fi
 				
 				if [[ $(readlink /etc/turtle/Responder/logs) != "/tmp/Responder/logs" || ! -d /tmp/Responder/logs ]]; then
-					rm -r /etc/turtle/Responder/logs
+					rm -rf /etc/turtle/Responder/logs
 					mkdir -p /tmp/Responder/logs
 					ln -s /tmp/Responder/logs /etc/turtle/Responder/logs
 				fi
@@ -142,9 +148,11 @@ function start {
 				echo "Responder started and logs are being saved to /tmp/Responder"
 				;;
 			*)
-				echo "Responder configuration not valid. Please re-configure then try again."
-				rm -r /etc/config/responder
+				echo "Responder configuration not valid."
+				echo "Please re-configure then try again."
+				rm -f /etc/config/responder
 				exit 1
+				;;
 		esac
 	else
 		echo "Responder not configured."
