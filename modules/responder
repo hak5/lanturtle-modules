@@ -224,7 +224,7 @@ The log files can be saved to SSHFS or tmp.\n" 16 60 3\
 				;;
 			*)
 				echo "Responder log location not configured."
-				log;;
+				;;
 		esac
 		log;;
 	$DIALOG_HELP)
