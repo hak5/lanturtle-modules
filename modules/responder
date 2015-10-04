@@ -1,5 +1,5 @@
 #!/bin/bash /usr/lib/turtle/turtle_module
-VERSION="2.2"
+VERSION="2.3"
 DESCRIPTION="Responder - LLMNR, NBT-NS and MDNS poisoner"
 CONF=/tmp/responder.form
 AUTHOR=IMcPwn
@@ -11,191 +11,202 @@ AUTHOR=IMcPwn
 : ${DIALOG_ESC=255}
 
 function start {
-	if [ -s /etc/config/responder ]; 
-	then
-		responder_interface=$(uci get responder.interface)
-		responder_log=$(uci get responder.log)
-		responder_mode=$(uci get responder.mode)
-		
-		if [[ $responder_interface == "" ]];
-		then
-			echo "Responder interface not configured."
-			exit 1
-		fi
-		
-		if [[ $responder_log == "" ]];
-		then
-			echo "Responder log location not configured."
-			exit 1
-		fi
-		
-		if [[ $responder_mode == "" ]];
-		then
-			echo "Responder mode not configured."
-			exit 1
-		fi
-	
-		if [[ ! $(opkg list-installed | grep git) ]];
-		then
-			echo "Git not installed. Installing..."
-			opkg update && opkg install git
-		fi
-		
-		if [[ ! $(opkg list-installed | grep python-sqlite3) ]];
-		then
-			echo "Python-sqlite3 not installed. Installing..."
-			opkg update && opkg install python-sqlite3
-		fi
-		
-		if [[ ! -d /etc/turtle/Responder || ! -s /etc/turtle/Responder/Responder.py || ! -s /etc/turtle/Responder/Responder.conf ]];
-		then
-			rm -rf /etc/turtle/Responder
-			echo "Responder not downloaded or corrupted. Downloading..."
-			git clone git://github.com/SpiderLabs/Responder /etc/turtle/Responder
-		fi
-		
-		case $responder_mode in
-			1) mode="";;
-			2) mode="-A";;
-			3) mode="-w";;
-			4) mode="-r";;
-			5) mode="-F";;
-			6) mode="-f";;
-			7) mode="-v";;
-			8) mode="-r -F";;
-			9) mode="-r -F -f";;
-			*)
-				echo "Responder configuration not valid."
-				echo "Please re-configure then try again."
-				rm -f /etc/config/responder
-				exit 1
-				;;
-		esac
-	
-		case $responder_log in
-			sshfs)
-				if pgrep sshfs > /dev/null;
-				then
-					if [[ $responder_interface == "eth1" ]];
-					then
-						iptables -t filter -I INPUT 1 -i eth1 -j ACCEPT
-						iptables -I INPUT 1 -i eth1 -p udp --dport 53 -j ACCEPT
-						iptables -I INPUT 1 -i eth1 -p udp --dport 137 -j ACCEPT
-						iptables -I INPUT 1 -i eth1 -p udp --dport 138 -j ACCEPT
-						iptables -I INPUT 1 -i eth1 -p udp --dport 389 -j ACCEPT
-						iptables -I INPUT 1 -i eth1 -p udp --dport 5553 -j ACCEPT
-						iptables -I INPUT 1 -i eth1 -p tcp --dport 21 -j ACCEPT
-						iptables -I INPUT 1 -i eth1 -p tcp --dport 25 -j ACCEPT
-						iptables -I INPUT 1 -i eth1 -p tcp --dport 80 -j ACCEPT
-						iptables -I INPUT 1 -i eth1 -p tcp --dport 110 -j ACCEPT
-						iptables -I INPUT 1 -i eth1 -p tcp --dport 139 -j ACCEPT
-						iptables -I INPUT 1 -i eth1 -p tcp --dport 389 -j ACCEPT
-						iptables -I INPUT 1 -i eth1 -p tcp --dport 445 -j ACCEPT
-						iptables -I INPUT 1 -i eth1 -p tcp --dport 1433 -j ACCEPT
-						iptables -I INPUT 1 -i eth1 -p tcp --dport 3141 -j ACCEPT
-					fi
-					
-					if [ -s /etc/turtle/Responder/Responder.db ]; 
-					then
-						rm -f /etc/turtle/Responder/Responder.db
-					fi
-					
-					if [[ $(readlink /etc/turtle/Responder/logs) != "/sshfs/Responder/logs" || ! -d /sshfs/Responder/logs ]]; 
-					then
-						rm -rf /etc/turtle/Responder/logs
-						mkdir -p /sshfs/Responder/logs
-						ln -s /sshfs/Responder/logs /etc/turtle/Responder/logs
-					fi
-					
-					echo "python /etc/turtle/Responder/Responder.py $mode -I $responder_interface" | at now
-					echo "Responder started and logs are being saved to /sshfs/Responder"
-				else 
-					echo "SSHFS not running"
-				fi
-				;;
-			tmp)
-				if [[ $responder_interface == "eth1" ]]; 
-				then
-					iptables -t filter -I INPUT 1 -i eth1 -j ACCEPT
-					iptables -I INPUT 1 -i eth1 -p udp --dport 53 -j ACCEPT
-					iptables -I INPUT 1 -i eth1 -p udp --dport 137 -j ACCEPT
-					iptables -I INPUT 1 -i eth1 -p udp --dport 138 -j ACCEPT
-					iptables -I INPUT 1 -i eth1 -p udp --dport 389 -j ACCEPT
-					iptables -I INPUT 1 -i eth1 -p udp --dport 5553 -j ACCEPT
-					iptables -I INPUT 1 -i eth1 -p tcp --dport 21 -j ACCEPT
-					iptables -I INPUT 1 -i eth1 -p tcp --dport 25 -j ACCEPT
-					iptables -I INPUT 1 -i eth1 -p tcp --dport 80 -j ACCEPT
-					iptables -I INPUT 1 -i eth1 -p tcp --dport 110 -j ACCEPT
-					iptables -I INPUT 1 -i eth1 -p tcp --dport 139 -j ACCEPT
-					iptables -I INPUT 1 -i eth1 -p tcp --dport 389 -j ACCEPT
-					iptables -I INPUT 1 -i eth1 -p tcp --dport 445 -j ACCEPT
-					iptables -I INPUT 1 -i eth1 -p tcp --dport 1433 -j ACCEPT
-					iptables -I INPUT 1 -i eth1 -p tcp --dport 3141 -j ACCEPT
-				fi
-				
-				if [ -s /etc/turtle/Responder/Responder.db ]; 
-				then
-					rm -f /etc/turtle/Responder/Responder.db
-				fi
-				
-				if [[ $(readlink /etc/turtle/Responder/logs) != "/tmp/Responder/logs" || ! -d /tmp/Responder/logs ]]; then
-					rm -rf /etc/turtle/Responder/logs
-					mkdir -p /tmp/Responder/logs
-					ln -s /tmp/Responder/logs /etc/turtle/Responder/logs
-				fi
-				
-				echo "python /etc/turtle/Responder/Responder.py $mode -I $responder_interface" | at now
-				echo "Responder started and logs are being saved to /tmp/Responder"
-				;;
-			*)
-				echo "Responder configuration not valid."
-				echo "Please re-configure then try again."
-				rm -f /etc/config/responder
-				exit 1
-				;;
-		esac
-	else
-		echo "Responder not configured."
-		exit 1
+  if [ -s /etc/config/responder ]; 
+  then
+    responder_interface=$(uci get responder.interface)
+    responder_log=$(uci get responder.log)
+    responder_mode=$(uci get responder.mode)
+    
+    if [[ $responder_interface == "" ]];
+    then
+      echo "Responder interface not configured."
+      exit 1
+    fi
+    
+    if [[ $responder_log == "" ]];
+    then
+      echo "Responder log location not configured."
+      exit 1
+    fi
+    
+    if [[ $responder_mode == "" ]];
+    then
+      echo "Responder mode not configured."
+      exit 1
+    fi
+  
+    if [[ ! $(opkg list-installed | grep git) ]];
+    then
+      check_internet
+      echo "Git not installed. Installing..."
+      opkg update && opkg install git
+    fi
+    
+    if [[ ! $(opkg list-installed | grep python-sqlite3) ]];
+    then
+      check_internet
+      echo "Python-sqlite3 not installed. Installing..."
+      opkg update && opkg install python-sqlite3
+    fi
+    
+    if [[ ! -d /etc/turtle/Responder || ! -s /etc/turtle/Responder/Responder.py || ! -s /etc/turtle/Responder/Responder.conf ]];
+    then
+      check_internet
+      rm -rf /etc/turtle/Responder
+      echo "Responder not downloaded or corrupted. Downloading..."
+      git clone git://github.com/SpiderLabs/Responder /etc/turtle/Responder
+    fi
+    
+    case $responder_mode in
+      1) mode="";;
+      2) mode="-A";;
+      3) mode="-w";;
+      4) mode="-r";;
+      5) mode="-F";;
+      6) mode="-f";;
+      7) mode="-v";;
+      8) mode="-r -F";;
+      9) mode="-r -F -f";;
+      *)
+        echo "Responder configuration not valid."
+        echo "Please re-configure then try again."
+        rm -f /etc/config/responder
+        exit 1
+        ;;
+    esac
+  
+    case $responder_log in
+      sshfs)
+        if pgrep sshfs > /dev/null;
+        then
+          if [[ $responder_interface == "eth1" ]];
+          then
+            iptables -t filter -I INPUT 1 -i eth1 -j ACCEPT
+            iptables -I INPUT 1 -i eth1 -p udp --dport 53 -j ACCEPT
+            iptables -I INPUT 1 -i eth1 -p udp --dport 137 -j ACCEPT
+            iptables -I INPUT 1 -i eth1 -p udp --dport 138 -j ACCEPT
+            iptables -I INPUT 1 -i eth1 -p udp --dport 389 -j ACCEPT
+            iptables -I INPUT 1 -i eth1 -p udp --dport 5553 -j ACCEPT
+            iptables -I INPUT 1 -i eth1 -p tcp --dport 21 -j ACCEPT
+            iptables -I INPUT 1 -i eth1 -p tcp --dport 25 -j ACCEPT
+            iptables -I INPUT 1 -i eth1 -p tcp --dport 80 -j ACCEPT
+            iptables -I INPUT 1 -i eth1 -p tcp --dport 110 -j ACCEPT
+            iptables -I INPUT 1 -i eth1 -p tcp --dport 139 -j ACCEPT
+            iptables -I INPUT 1 -i eth1 -p tcp --dport 389 -j ACCEPT
+            iptables -I INPUT 1 -i eth1 -p tcp --dport 445 -j ACCEPT
+            iptables -I INPUT 1 -i eth1 -p tcp --dport 1433 -j ACCEPT
+            iptables -I INPUT 1 -i eth1 -p tcp --dport 3141 -j ACCEPT
+          fi
+          
+          if [ -s /etc/turtle/Responder/Responder.db ]; 
+          then
+            rm -f /etc/turtle/Responder/Responder.db
+          fi
+          
+          if [[ $(readlink /etc/turtle/Responder/logs) != "/sshfs/Responder/logs" || ! -d /sshfs/Responder/logs ]]; 
+          then
+            rm -rf /etc/turtle/Responder/logs
+            mkdir -p /sshfs/Responder/logs
+            ln -s /sshfs/Responder/logs /etc/turtle/Responder/logs
+          fi
+          
+          echo "python /etc/turtle/Responder/Responder.py $mode -I $responder_interface" | at now
+          echo "Responder started and logs are being saved to /sshfs/Responder"
+        else 
+          echo "SSHFS not running"
+        fi
+        ;;
+      tmp)
+        if [[ $responder_interface == "eth1" ]]; 
+        then
+          iptables -t filter -I INPUT 1 -i eth1 -j ACCEPT
+          iptables -I INPUT 1 -i eth1 -p udp --dport 53 -j ACCEPT
+          iptables -I INPUT 1 -i eth1 -p udp --dport 137 -j ACCEPT
+          iptables -I INPUT 1 -i eth1 -p udp --dport 138 -j ACCEPT
+          iptables -I INPUT 1 -i eth1 -p udp --dport 389 -j ACCEPT
+          iptables -I INPUT 1 -i eth1 -p udp --dport 5553 -j ACCEPT
+          iptables -I INPUT 1 -i eth1 -p tcp --dport 21 -j ACCEPT
+          iptables -I INPUT 1 -i eth1 -p tcp --dport 25 -j ACCEPT
+          iptables -I INPUT 1 -i eth1 -p tcp --dport 80 -j ACCEPT
+          iptables -I INPUT 1 -i eth1 -p tcp --dport 110 -j ACCEPT
+          iptables -I INPUT 1 -i eth1 -p tcp --dport 139 -j ACCEPT
+          iptables -I INPUT 1 -i eth1 -p tcp --dport 389 -j ACCEPT
+          iptables -I INPUT 1 -i eth1 -p tcp --dport 445 -j ACCEPT
+          iptables -I INPUT 1 -i eth1 -p tcp --dport 1433 -j ACCEPT
+          iptables -I INPUT 1 -i eth1 -p tcp --dport 3141 -j ACCEPT
+        fi
+        
+        if [ -s /etc/turtle/Responder/Responder.db ]; 
+        then
+          rm -f /etc/turtle/Responder/Responder.db
+        fi
+        
+        if [[ $(readlink /etc/turtle/Responder/logs) != "/tmp/Responder/logs" || ! -d /tmp/Responder/logs ]]; then
+          rm -rf /etc/turtle/Responder/logs
+          mkdir -p /tmp/Responder/logs
+          ln -s /tmp/Responder/logs /etc/turtle/Responder/logs
+        fi
+        
+        echo "python /etc/turtle/Responder/Responder.py $mode -I $responder_interface" | at now
+        echo "Responder started and logs are being saved to /tmp/Responder"
+        ;;
+      *)
+        echo "Responder configuration not valid."
+        echo "Please re-configure then try again."
+        rm -f /etc/config/responder
+        exit 1
+        ;;
+    esac
+  else
+    echo "Responder not configured."
+    exit 1
 fi
 }
 
 function stop {
-	responder_interface=$(uci get responder.interface)
-	if [[ $responder_interface == "eth1" ]]; 
-	then
-		#iptables -t filter -I INPUT 1 -i eth1 -j ACCEPT
-		iptables -t filter -D INPUT -i eth1 -j ACCEPT
-		iptables -D INPUT -i eth1 -p udp --dport 53 -j ACCEPT
-		iptables -D INPUT -i eth1 -p udp --dport 137 -j ACCEPT
-		iptables -D INPUT -i eth1 -p udp --dport 138 -j ACCEPT
-		iptables -D INPUT -i eth1 -p udp --dport 389 -j ACCEPT
-		iptables -D INPUT -i eth1 -p udp --dport 5553 -j ACCEPT
-		iptables -D INPUT -i eth1 -p tcp --dport 21 -j ACCEPT
-		iptables -D INPUT -i eth1 -p tcp --dport 25 -j ACCEPT
-		iptables -D INPUT -i eth1 -p tcp --dport 80 -j ACCEPT
-		iptables -D INPUT -i eth1 -p tcp --dport 110 -j ACCEPT
-		iptables -D INPUT -i eth1 -p tcp --dport 139 -j ACCEPT
-		iptables -D INPUT -i eth1 -p tcp --dport 389 -j ACCEPT
-		iptables -D INPUT -i eth1 -p tcp --dport 445 -j ACCEPT
-		iptables -D INPUT -i eth1 -p tcp --dport 1433 -j ACCEPT
-		iptables -D INPUT -i eth1 -p tcp --dport 3141 -j ACCEPT
-	fi
-	
-	kill $(ps | grep -w [/]etc/turtle/Responder/Responder.py | awk {'print $1'})
+  responder_interface=$(uci get responder.interface)
+  if [[ $responder_interface == "eth1" ]]; 
+  then
+    #iptables -t filter -I INPUT 1 -i eth1 -j ACCEPT
+    iptables -t filter -D INPUT -i eth1 -j ACCEPT
+    iptables -D INPUT -i eth1 -p udp --dport 53 -j ACCEPT
+    iptables -D INPUT -i eth1 -p udp --dport 137 -j ACCEPT
+    iptables -D INPUT -i eth1 -p udp --dport 138 -j ACCEPT
+    iptables -D INPUT -i eth1 -p udp --dport 389 -j ACCEPT
+    iptables -D INPUT -i eth1 -p udp --dport 5553 -j ACCEPT
+    iptables -D INPUT -i eth1 -p tcp --dport 21 -j ACCEPT
+    iptables -D INPUT -i eth1 -p tcp --dport 25 -j ACCEPT
+    iptables -D INPUT -i eth1 -p tcp --dport 80 -j ACCEPT
+    iptables -D INPUT -i eth1 -p tcp --dport 110 -j ACCEPT
+    iptables -D INPUT -i eth1 -p tcp --dport 139 -j ACCEPT
+    iptables -D INPUT -i eth1 -p tcp --dport 389 -j ACCEPT
+    iptables -D INPUT -i eth1 -p tcp --dport 445 -j ACCEPT
+    iptables -D INPUT -i eth1 -p tcp --dport 1433 -j ACCEPT
+    iptables -D INPUT -i eth1 -p tcp --dport 3141 -j ACCEPT
+  fi
+  
+  kill $(ps | grep -w [/]etc/turtle/Responder/Responder.py | awk {'print $1'})
 }
 
 function status {
-	if ps | grep -w -q [/]etc/turtle/Responder/Responder.py; then echo "1"; else echo "0"; fi
+  if ps | grep -w -q [/]etc/turtle/Responder/Responder.py; then echo "1"; else echo "0"; fi
 }
 
+function check_internet {
+    ping -q -w 5 -c 1 lanturtle.com &> /dev/null && {
+        :
+    } || {
+	echo -e "The LAN Turtle is currently offline. Responder requires\nan internet connection to install dependencies."
+        exit 1
+    }
+}
 
 function log {
 dialog --ok-label "Submit" \
     --title "Responder Log Configuration" \
-	--extra-button \
-	--extra-label "View log" \
-	--help-button \
+  --extra-button \
+  --extra-label "View log" \
+  --help-button \
     --radiolist "\n\
 The log files can be saved to SSHFS or tmp.\n" 16 60 3\
     1 "Save log to SSHFS if available." off\
@@ -206,37 +217,37 @@ The log files can be saved to SSHFS or tmp.\n" 16 60 3\
     $DIALOG_OK)
       LOG=$(cat $CONF)
       case $LOG in
-	1)
+        1)
           uci set responder.log="sshfs"
           uci commit responder
           ;;
-	2)
+        2)
           uci set responder.log="tmp"
           uci commit responder
           ;;
   esac
   configure
-    ;;
+  ;;
     $DIALOG_CANCEL)
       configure;;
     $DIALOG_ESC)
       configure;;
-	$DIALOG_EXTRA)
-		responder_log=$(uci get responder.log)
-		case $responder_log in
-			sshfs)
-				dialog --title "/sshfs/Responder/logs/Responder-Session.log" --clear --tailbox "/sshfs/Responder/logs/Responder-Session.log" 18 72
-				;;
-			tmp)
-				dialog --title "/tmp/Responder/logs/Responder-Session.log" --clear --tailbox "/tmp/Responder/logs/Responder-Session.log" 18 72
-				;;
-			*)
-				echo "Responder log location not configured."
-				;;
-		esac
-		log;;
-	$DIALOG_HELP)
-		dialog --title "Help" --msgbox "\n\
+  $DIALOG_EXTRA)
+    responder_log=$(uci get responder.log)
+    case $responder_log in
+      sshfs)
+        dialog --title "/sshfs/Responder/logs/Responder-Session.log" --clear --tailbox "/sshfs/Responder/logs/Responder-Session.log" 18 72
+        ;;
+      tmp)
+        dialog --title "/tmp/Responder/logs/Responder-Session.log" --clear --tailbox "/tmp/Responder/logs/Responder-Session.log" 18 72
+        ;;
+      *)
+        echo "Responder log location not configured."
+        ;;
+    esac
+    log;;
+  $DIALOG_HELP)
+    dialog --title "Help" --msgbox "\n\
 All activity will be logged to Responder-Session.log\n\
 Analyze mode will be logged to Analyze-Session.log\n\
 Poisoning will be logged to Poisoners-Session.log\n\n\
@@ -260,16 +271,16 @@ Responder can target the Host machine (The computer the LAN Turtle is plugged in
     $DIALOG_OK)
       INTERFACE=$(cat $CONF)
       case $INTERFACE in
-	1)
+        1)
           uci set responder.interface="br-lan"
           uci commit responder
           ;;
-	2)
+        2)
           uci set responder.interface="eth1"
           uci commit responder
           ;;
       esac
-	  configure
+    configure
     ;;
     $DIALOG_CANCEL)
       configure;;
@@ -281,7 +292,7 @@ Responder can target the Host machine (The computer the LAN Turtle is plugged in
 function mode {
   dialog --ok-label "Submit" \
     --title "Responder Mode" \
-	--help-button \
+    --help-button \
     --radiolist "Choose mode\n \n" 20 60 10\
     1 "Default mode" on\
     2 "Analyze mode" off\
@@ -298,42 +309,42 @@ function mode {
     $DIALOG_OK)
       mode=$(cat $CONF)
       case $mode in
-	1)
+        1)
           uci set responder.mode="1"
           uci commit responder;;
-	2)
+        2)
           uci set responder.mode="2"
           uci commit responder;;
-	3)
+        3)
           uci set responder.mode="3"
           uci commit responder;;
-	4)
+        4)
           uci set responder.mode="4"
           uci commit responder;;
-	5)
+        5)
           uci set responder.mode="5"
           uci commit responder;;
-	6)
+        6)
           uci set responder.mode="6"
           uci commit responder;;
-	7)
+        7)
           uci set responder.mode="7"
           uci commit responder;;
-	8)
+        8)
           uci set responder.mode="8"
           uci commit responder;;
-	9)
+        9)
           uci set responder.mode="9"
           uci commit responder;;
       esac
       configure
-    ;;
+      ;;
     $DIALOG_CANCEL)
       configure;;
     $DIALOG_ESC)
       configure;;
-	$DIALOG_HELP)
-		dialog --title "Help" --msgbox "\n\
+  $DIALOG_HELP)
+    dialog --title "Help" --msgbox "\n\
 Responder is an LLMNR, NBT-NS and MDNS poisoner. It will answer to specific NBT-NS (NetBIOS Name Service) queries based on their name suffix (see: http://support.microsoft.com/kb/163409).\n\
 By default, the tool will only answer to File Server Service request, which is for SMB.\n\n\
 The concept behind this is to target our answers, and be stealthier on the network. This also helps to ensure that we don't break legitimate NBT-NS behavior.\n\n\
@@ -376,11 +387,11 @@ dialog \
 function configure {
 if [[ ! -s /etc/config/responder ]];
 then
-	touch /etc/config/responder
+  touch /etc/config/responder
 fi
 
   dialog --title "" --menu "" 15 60 5 \
-    "log"	      "Specify log location" \
+    "log"             "Specify log location" \
     "interface"       "Specify interface to target" \
     "mode"            "Specify Responder mode" \
     "responderconf"   "Edit Responder.conf" \
