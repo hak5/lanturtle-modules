@@ -114,6 +114,7 @@ function start {
           echo "Responder started and logs are being saved to /sshfs/Responder"
         else 
           echo "SSHFS not running"
+          exit 1
         fi
         ;;
       tmp)
@@ -203,11 +204,11 @@ function check_internet {
 
 function log {
 dialog --ok-label "Submit" \
-    --title "Responder Log Configuration" \
+  --title "Responder Log Configuration" \
   --extra-button \
   --extra-label "View log" \
   --help-button \
-    --radiolist "\n\
+  --radiolist "\n\
 The log files can be saved to SSHFS or tmp.\n" 16 60 3\
     1 "Save log to SSHFS if available." off\
     2 "Save log to /tmp" off\
