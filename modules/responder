@@ -53,7 +53,7 @@ function start {
     then
       check_internet
       rm -rf /etc/turtle/Responder
-      echo "Responder not downloaded or corrupted. Downloading..."
+      echo "Responder files are not valid. Downloading..."
       git clone git://github.com/SpiderLabs/Responder /etc/turtle/Responder
     fi
     
@@ -227,13 +227,12 @@ The log files can be saved to SSHFS or tmp.\n" 16 60 3\
           uci commit responder
           ;;
   esac
-  configure
-  ;;
+  configure;;
     $DIALOG_CANCEL)
       configure;;
     $DIALOG_ESC)
       configure;;
-  $DIALOG_EXTRA)
+    $DIALOG_EXTRA)
     responder_log=$(uci get responder.log)
     case $responder_log in
       sshfs)
@@ -281,8 +280,7 @@ Responder can target the Host machine (The computer the LAN Turtle is plugged in
           uci commit responder
           ;;
       esac
-    configure
-    ;;
+    configure;;
     $DIALOG_CANCEL)
       configure;;
     $DIALOG_ESC)
@@ -338,13 +336,12 @@ function mode {
           uci set responder.mode="9"
           uci commit responder;;
       esac
-      configure
-      ;;
+      configure;;
     $DIALOG_CANCEL)
       configure;;
     $DIALOG_ESC)
       configure;;
-  $DIALOG_HELP)
+    $DIALOG_HELP)
     dialog --title "Help" --msgbox "\n\
 Responder is an LLMNR, NBT-NS and MDNS poisoner. It will answer to specific NBT-NS (NetBIOS Name Service) queries based on their name suffix (see: http://support.microsoft.com/kb/163409).\n\
 By default, the tool will only answer to File Server Service request, which is for SMB.\n\n\
@@ -372,16 +369,13 @@ dialog \
     $DIALOG_HELP)
       dialog --title "Help" \
         --msgbox "For information on this configuration, see: https://github.com/SpiderLabs/Responder" 20 60
-      responderconf
-      ;;
+      responderconf;;
     $DIALOG_CANCEL)
       rm $CONF
-      configure
-      ;;
+      configure;;
     $DIALOG_ESC)
       rm $CONF
-      configure
-      ;;
+      configure;;
   esac
 }
 
@@ -404,5 +398,5 @@ fi
     "mode") mode;;
     "responderconf") responderconf;;
     "back") exit;;
-esac
+  esac
 }
