@@ -37,23 +37,23 @@ function start {
   
     if [[ ! $(opkg list-installed | grep git) ]];
     then
-      check_internet
       echo "Git not installed. Installing..."
+      check_internet
       opkg update && opkg install git
     fi
     
     if [[ ! $(opkg list-installed | grep python-sqlite3) ]];
     then
-      check_internet
       echo "Python-sqlite3 not installed. Installing..."
+      check_internet
       opkg update && opkg install python-sqlite3
     fi
     
     if [[ ! -d /etc/turtle/Responder || ! -s /etc/turtle/Responder/Responder.py || ! -s /etc/turtle/Responder/Responder.conf ]];
     then
+      echo "Responder files are not valid. Downloading..."
       check_internet
       rm -rf /etc/turtle/Responder
-      echo "Responder files are not valid. Downloading..."
       git clone git://github.com/SpiderLabs/Responder /etc/turtle/Responder
     fi
     
@@ -197,7 +197,7 @@ function check_internet {
     ping -q -w 5 -c 1 lanturtle.com &> /dev/null && {
         :
     } || {
-	echo -e "The LAN Turtle is currently offline. Responder requires\nan internet connection to install dependencies."
+	echo -e "\nThe LAN Turtle is currently offline. The previous\noperation requires an internet connection."
         exit 1
     }
 }
