@@ -50,9 +50,9 @@ function status {
 }
 
 function configure {
-  if [ -s /etc/config/urlsnarf ]
+  if [ -s /etc/config/urlsnarf ];
   then
-    urlsanrf_log=$(uci get urlsnarf.log)
+    urlsnarf_log=$(uci get urlsnarf.log)
   else
     touch /etc/config/urlsnarf
   fi
