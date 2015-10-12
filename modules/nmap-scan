@@ -18,13 +18,13 @@ function start {
     nmap_profile=$(uci get nmap.profile)
     nmap_log=$(uci get nmap.log)
     if [ -z "$nmap_target" ]; then
-      echo "nmap module missig target configuration";exit
+      echo "nmap module missing target configuration";exit
     fi
     if [ -z "$nmap_profile" ]; then
-      echo "nmap module missig profile configuration";exit
+      echo "nmap module missing profile configuration";exit
     fi
     if [ -z "$nmap_log" ]; then
-      echo "nmap module missig log configuration";exit
+      echo "nmap module missing log configuration";exit
     fi
     case $nmap_profile in
       1) PROFILE="-T4 -A -v";;
