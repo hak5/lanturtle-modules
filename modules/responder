@@ -111,7 +111,7 @@ function start {
           fi
           
           echo "python /etc/turtle/Responder/Responder.py $mode -I $responder_interface" | at now
-          echo "Responder started and logs are being saved to /sshfs/Responder"
+          echo -e "Responder started in mode $responder_mode against interface $responder_interface\nand logs are being saved to /sshfs/Responder"
         else 
           echo "SSHFS not running"
           exit 1
@@ -149,7 +149,7 @@ function start {
         fi
         
         echo "python /etc/turtle/Responder/Responder.py $mode -I $responder_interface" | at now
-        echo "Responder started and logs are being saved to /tmp/Responder"
+        echo -e "Responder started in mode $responder_mode against interface $responder_interface\nand logs are being saved to /tmp/Responder"
         ;;
       *)
         echo "Responder configuration not valid."
