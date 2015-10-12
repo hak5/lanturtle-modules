@@ -197,7 +197,7 @@ function check_internet {
     ping -q -w 5 -c 1 lanturtle.com &> /dev/null && {
         :
     } || {
-	echo -e "\nThe LAN Turtle is currently offline. The previous\noperation requires an internet connection."
+        echo -e "\nThe LAN Turtle is currently offline. The previous\noperation requires an internet connection."
         exit 1
     }
 }
@@ -293,7 +293,7 @@ function mode {
     --title "Responder Mode" \
     --help-button \
     --radiolist "Choose mode\n \n" 20 60 10\
-    1 "Default mode" on\
+    1 "Default mode" off\
     2 "Analyze mode" off\
     3 "Start WPAD rouge proxy server" off\
     4 "Enable answers for netbios suffix queries" off\
