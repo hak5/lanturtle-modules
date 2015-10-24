@@ -37,24 +37,24 @@ function start {
   
     if [[ ! $(opkg list-installed | grep git) ]];
     then
-      echo "Git not installed. Installing..."
+      echo "Dependency git not installed. Installing..."
       check_internet
-      opkg update && opkg install git
+      opkg update > /dev/null && opkg install git
     fi
     
     if [[ ! $(opkg list-installed | grep python-sqlite3) ]];
     then
-      echo "Python-sqlite3 not installed. Installing..."
+      echo "Dependency python-sqlite3 not installed. Installing..."
       check_internet
-      opkg update && opkg install python-sqlite3
+      opkg update > /dev/null && opkg install python-sqlite3
     fi
     
     if [[ ! -d /etc/turtle/Responder || ! -s /etc/turtle/Responder/Responder.py || ! -s /etc/turtle/Responder/Responder.conf ]];
     then
-      echo "Responder files are not valid. Downloading..."
+      echo "Required Responder files not found. Downloading..."
       check_internet
       rm -rf /etc/turtle/Responder
-      git clone git://github.com/SpiderLabs/Responder /etc/turtle/Responder
+      git clone git://github.com/SpiderLabs/Responder /etc/turtle/Responder -q
     fi
     
     case $responder_mode in
@@ -112,6 +112,7 @@ function start {
           
           echo "python /etc/turtle/Responder/Responder.py $mode -I $responder_interface" | at now
           echo -e "Responder started in mode $responder_mode against interface $responder_interface\nand logs are being saved to /sshfs/Responder"
+          echo "Logs can be viewed at Configure > log > View log"
         else 
           echo "SSHFS not running"
           exit 1
@@ -150,6 +151,7 @@ function start {
         
         echo "python /etc/turtle/Responder/Responder.py $mode -I $responder_interface" | at now
         echo -e "Responder started in mode $responder_mode against interface $responder_interface\nand logs are being saved to /tmp/Responder"
+        echo "Logs can be viewed at Configure > log > View log"
         ;;
       *)
         echo "Responder configuration not valid."
