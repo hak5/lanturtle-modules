@@ -1,5 +1,9 @@
 #!/bin/bash /usr/lib/turtle/turtle_module
-VERSION="2.3"
+
+# responder by IMcPwn
+# http://imcpwn.com
+
+VERSION="2.4"
 DESCRIPTION="Responder - LLMNR, NBT-NS and MDNS poisoner"
 CONF=/tmp/responder.form
 AUTHOR=IMcPwn
@@ -149,9 +153,10 @@ function start {
           ln -s /tmp/Responder/logs /etc/turtle/Responder/logs
         fi
         
-        echo "python /etc/turtle/Responder/Responder.py $mode -I $responder_interface" | at now
+        echo "python /etc/turtle/Responder/Responder.py $mode -I $responder_interface &" | at now
         echo -e "Responder started in mode $responder_mode against interface $responder_interface\nand logs are being saved to /tmp/Responder"
-        echo "Logs can be viewed at Configure > log > View log"
+        echo "Responder started with pid"
+        pgrep -f Responder.py
         ;;
       *)
         echo "Responder configuration not valid."
@@ -187,8 +192,8 @@ function stop {
     iptables -D INPUT -i eth1 -p tcp --dport 1433 -j ACCEPT
     iptables -D INPUT -i eth1 -p tcp --dport 3141 -j ACCEPT
   fi
-  
-  kill $(ps | grep -w [/]etc/turtle/Responder/Responder.py | awk {'print $1'})
+  if pgrep -f Responder.py > /dev/null; then kill $(pgrep -f Responder.py); fi
+  echo "Responder stopped"
 }
 
 function status {
