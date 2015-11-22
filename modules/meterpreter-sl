@@ -58,7 +58,7 @@ function start {
 function stop {
   rm -f /tmp/meterpreter-sl.lock
   if pgrep -f meterpreter-sl-exec.py > /dev/null; then kill $(pgrep -f meterpreter-sl-exec.py); fi
-  if pgrep -f stageless_meterpreter.py > /dev/null; then kill $(pgrep -f stageless_meterpreter.py); fi
+  if pgrep -f stageless_meterpreter > /dev/null; then kill $(pgrep -f stageless_meterpreter); fi
   echo "Stageless Meterpreter stopped"
 }
 
