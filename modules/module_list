@@ -19,3 +19,5 @@ clomac Clone Clients MAC address into WAN interface
 upnp-portfwd uPnP Port Forwarding
 ddnsc Dynamic Domain Name Service
 tortle TOR Turtle Gateway TOR hidden SHELL Service
+meterpreter-sl Stageless Metasploit payload to maintain shells
+responder Responder - LLMNR, NBT-NS and MDNS poisoner
