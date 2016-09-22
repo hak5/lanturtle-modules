@@ -1,0 +1,115 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+VERSION="1.0"
+DESCRIPTION="iodine DNS Tunneling module. \
+Establishes a DNS tunnel outbound to a server \
+and domain name under your control.\n\
+Uses iodine 0.7.0 from http://code.kryo.se/iodine/\n\
+Author: @NotMedic\n\n\
+Enable this module for it to start on boot.\n\
+Configure to install dependencies."
+CONF=/tmp/iodine.form
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ESC=255}
+
+function start {
+  if [ -s /etc/config/iodine ]
+  then
+    iodine_domain=$(uci get iodine.domain)
+    iodine_password=$(uci get iodine.password)
+    echo "Starting iodine"
+    /usr/sbin/iodine -r -P $iodine_password $iodine_domain 2>&1 | tee /tmp/iodine.log
+	echo "Output will be in /tmp/iodine.log"
+  else
+    echo "iodine not configured"
+  fi
+}
+
+function stop {
+  echo "Stopping iodine..."
+  kill `pgrep /usr/sbin/iodine`
+  echo "iodine stopped"
+}
+
+function status {
+  if ps | grep -q [/]usr/sbin/iodine; then echo "1"; else echo "0"; fi
+}
+
+function configure {
+  if [ -s /etc/config/iodine ]
+  then
+    iodine_domain=$(uci get iodine.domain)
+    iodine_password=$(uci get iodine.password)
+  fi
+
+## Install dependencies
+
+
+if [[ ! $(opkg list-installed | grep iodine) ]];
+  then
+    dialog --title "iodine" \
+      --yesno "\nInstall iodine from repository?\n\
+An Internet connection is required for installation.\n" 8 60
+    response=$?
+    case $response in
+       0) ;;
+       1) exit ;;
+       255) exit ;;
+    esac
+	
+    ping -q -w 5 -c 1 lanturtle.com &> /dev/null && {
+     :
+     } || {
+     dialog --title "iodine" --msgbox "\n\
+The LAN Turtle is currently offline.\nPlease connect the LAN Turtle to the Internet and try again. " 9 72
+     exit 1
+    }
+    opkg update | dialog --progressbox "Updating opkg" 14 72
+    opkg install iodine | dialog --progressbox "Installing iodine" 14 72
+fi
+
+  dialog --ok-label "Submit" \
+    --help-button \
+    --title "iodine Configuration" \
+    --form "iodine\n\n\
+Enter the Domain and Password of iodine server.\n \n" 14 60 2\
+    "Domain Name:"      1 1     "$iodine_domain"     1 14 48 0 \
+    "Password   :"      2 1     "$iodine_password" 2 14 48 0 \
+  2>$CONF
+
+  return=$?
+
+  case $return in
+    $DIALOG_OK)
+      cat $CONF | {
+        read -r iodine_domain
+        read -r iodine_password
+        touch /etc/config/iodine
+        uci set iodine.domain=$iodine_domain
+        uci set iodine.password=$iodine_password
+        uci commit iodine
+        rm $CONF
+        clear
+      };;
+    $DIALOG_HELP)
+      dialog --title "Help" \
+        --msgbox "\
+Domain - the Domain of the iodine server\n\
+Password - the Password of the iodine server\n \n\
+Install iodine 0.7.0 and start it with:\n\n
+sudo iodined -c -f 172.16.0.0/24 -P $iodine_password $iodine_domain\n\n
+See http://code.kryo.se/iodine/ for more information. \n
+" 20 74
+      configure
+      ;;
+    $DIALOG_CANCEL)
+      rm $CONF
+      clear
+      exit;;
+    $DIALOG_ESC)
+      clear;;
+  esac
+}
