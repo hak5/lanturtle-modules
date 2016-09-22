@@ -21,5 +21,5 @@ ddnsc Dynamic Domain Name Service
 tortle TOR Turtle Gateway TOR hidden SHELL Service
 meterpreter-sl Stageless Metasploit payload to maintain shells
 responder Responder - LLMNR, NBT-NS and MDNS poisoner
-QuickCreds - Snag creds from locked machines -Mubix, Room362.com
+QuickCreds Snag creds from locked machines -Mubix, Room362.com
 iodine Creates a DNS Tunnel using iodine 
