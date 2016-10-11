@@ -114,7 +114,7 @@ echo "Starting attack..." >> /root/loot/responder.log
 cd /root/loot
 dircount=$(ls -lad /root/loot/* | wc -l)
 mkdir /root/loot/$((dircount))
-rm /etc/turtle/Responder/logs
+rm -rf /etc/turtle/Responder/logs
 ln -s /root/loot/$((dircount)) /etc/turtle/Responder/logs
 
 # Stop dnsmasq
