@@ -1,5 +1,5 @@
 #!/bin/bash /usr/lib/turtle/turtle_module
-VERSION="1.1"
+VERSION="1.2"
 DESCRIPTION="Snagging creds from locked machines --Mubix, Room362.com. Implements responder attack and saves creds to numbered directories in /root/loot. LED will blink rapidly while QuickCreds is running. Upon capture of NTLM hash the amber LED will light solid. Author: Hak5Darren. Credit: Mubix."
 CONF=/tmp/QuickCreds.form
 
