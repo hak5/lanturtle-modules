@@ -1,6 +1,6 @@
 #!/bin/bash /usr/lib/turtle/turtle_module
 
-VERSION="1.1"
+VERSION="1.2"
 DESCRIPTION="AutoSSH maintains persistent secure shells"
 CONF=/tmp/autossh.form
 
@@ -33,6 +33,7 @@ function configure {
   if [ -s /etc/config/autossh ]
   then
     autossh_host=$(uci show autossh.@autossh[0].ssh | awk '{print $7}')
+    autossh_port=$(uci show autossh.@autossh[0].ssh | awk '{print $9}')
     autossh_remoteport=$(uci show autossh.@autossh[0].ssh | awk '{print $6}' | sed 's/:/ /g' | awk '{print $1}')
     autossh_localport=$(uci show autossh.@autossh[0].ssh | awk '{print $6}' | sed 's/:/ /g' | awk '{print $3}')
   else
@@ -44,11 +45,13 @@ function configure {
     --title "AutoSSH Configuration" \
     --form "AutoSSH (Persistent Secure Shell)\n\n\
 User@Host:   User and Host to establish the SSH tunnel\n\
+Port: Port of the Host to establish the SSH tunnel\n\
 Remote Port: Remote port to bind through the SSH tunnel\n\
-Local Port:  Local port to bind tunnel (Default 22)\n \n" 16 60 3\
-    "User@Host:"	1 1	"$autossh_host"	1 14 48 0 \
-    "Remote Port:"	2 1	"$autossh_remoteport"	2 14 48 0 \
-    "Local Port:"	3 1	"$autossh_localport"	3 14 48 0 \
+Local Port:  Local port to bind tunnel (Default 22)\n \n" 16 60 4\
+    "User@Host:"    1 1 "$autossh_host" 1 14 48 0 \
+    "Port:"         2 1 "$autossh_port" 2 14 48 0 \
+    "Remote Port:"  3 1 "$autossh_remoteport" 3 14 48 0 \
+    "Local Port:"   4 1 "$autossh_localport" 4 14 48 0 \
   2>$CONF
 
   return=$?
@@ -57,10 +60,11 @@ Local Port:  Local port to bind tunnel (Default 22)\n \n" 16 60 3\
     $DIALOG_OK)
       cat $CONF | { 
         read -r autossh_host
+        read -r autossh_port
         read -r autossh_remoteport
         read -r autossh_localport
         touch /etc/config/autossh
-        uci set autossh.@autossh[0].ssh="-i /root/.ssh/id_rsa -N -T -R "$autossh_remoteport":localhost:"$autossh_localport" "$autossh_host""
+        uci set autossh.@autossh[0].ssh="-i /root/.ssh/id_rsa -N -T -R "$autossh_remoteport":localhost:"$autossh_localport" "$autossh_host" -p "$autossh_port""
         uci commit autossh
         rm $CONF
       };;
