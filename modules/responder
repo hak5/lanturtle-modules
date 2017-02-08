@@ -102,7 +102,7 @@ function start {
       echo "Required Responder files not found. Downloading..."
       check_internet
       rm -rf /etc/turtle/Responder
-      git clone git://github.com/SpiderLabs/Responder /etc/turtle/Responder -q
+      git clone git://github.com/lgandx/Responder /etc/turtle/Responder -q
     fi
     
     case $responder_mode in
@@ -354,7 +354,7 @@ function mode {
 Responder is an LLMNR, NBT-NS and MDNS poisoner. It will answer to specific NBT-NS (NetBIOS Name Service) queries based on their name suffix (see: http://support.microsoft.com/kb/163409).\n\
 By default, the tool will only answer to File Server Service request, which is for SMB.\n\n\
 The concept behind this is to target our answers, and be stealthier on the network. This also helps to ensure that we don't break legitimate NBT-NS behavior.\n\n\
-For more information, see: https://github.com/SpiderLabs/Responder\n\
+For more information, see: https://github.com/lgandx/Responder\n\
 " 18 72
 mode
   esac
@@ -376,7 +376,7 @@ dialog \
       };;
     $DIALOG_HELP)
       dialog --title "Help" \
-        --msgbox "For information on this configuration, see: https://github.com/SpiderLabs/Responder" 20 60
+        --msgbox "For information on this configuration, see: https://github.com/lgandx/Responder" 20 60
       responderconf;;
     $DIALOG_CANCEL)
       rm $CONF
