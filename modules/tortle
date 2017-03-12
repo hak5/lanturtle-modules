@@ -1,7 +1,7 @@
 #!/bin/bash /usr/lib/turtle/turtle_module
-VERSION="0.8"
+VERSION="0.9"
 DESCRIPTION="TORtle - TOR Turtle Gateway + TOR hidden SHELL/Service"
-AUTHOR="Shad"
+AUTHOR="Original by shad - customized by GermanNoob"
 CONF="/tmp/tortle.form"
 
 : ${DIALOG_OK=0}
@@ -12,12 +12,12 @@ CONF="/tmp/tortle.form"
 : ${DIALOG_ESC=255}
 
 function tortlecfg {
-	if [ "$(uci get tortle.version)" != "0.8" ]; then
+	if [ "$(uci get tortle.version)" != "0.9" ]; then
 		rm /etc/config/tortle
 	fi
 	if [ ! -e "/etc/config/tortle" ]; then
 		touch /etc/config/tortle
-		uci set tortle.version="0.8"
+		uci set tortle.version="0.9"
 		uci set tortle.enableproxy="1"
 		uci set tortle.enabletrans="1"
 		uci set tortle.transport="9040"
@@ -36,9 +36,25 @@ function tortlecfg {
 		uci set tortle.controladdr="172.16.84.1"	# deprecated
 		uci set tortle.hashedpass="16:D2237CB1DA58774A60EF13100BEFEDE024F5C49BA674CE2BEA1032EC38"	# default: test
 		uci set tortle.gateway="0"
+		uci set tortle.enablebridge="0"			#begin of changes
+		uci set tortle.bridgeip="45.63.68.218"
+		uci set tortle.bridgeport="8443"
+		uci set tortle.bridgefingerprint="FF9217F56523FC663DAF837FD99A99BA00901A15"
+		uci set tortle.enablehttpproxy="0"
+		uci set tortle.httpproxyip="127.0.0.1"
+		uci set tortle.httpproxyport="80"
+		uci set tortle.httpproxyuser="some"
+		uci set tortle.httpproxypasswd="body"
+		uci set tortle.enablehttpsproxy="0"
+		uci set tortle.httpsproxyip="127.0.0.1"
+		uci set tortle.httpsproxyport="443"
+		uci set tortle.httpsproxyuser="some"
+		uci set tortle.httpsproxypasswd="body" 
+		uci set tortle.fascistfirewall="0"
+		uci set tortle.fascistfirewallports="80,443"	#end of changes
 		uci commit tortle
         fi
-
+	
 	tortle_tport="$(uci get tortle.tport)"			# * customizable
 	tortle_lport="$(uci get tortle.lport)"			# * customizable
 	tortle_socksip="$(uci get network.lan.ipaddr)"  	# Use network.lan.ipaddr
@@ -58,6 +74,24 @@ function tortlecfg {
 	tortle_hashedpass="$(uci get tortle.hashedpass)"	# * customizable
 	tortle_gateway="$(uci get tortle.gateway)"		# * customizable
 	tortle_version="$(uci get tortle.version)"
+	tortle_enablebridge="$(uci get tortle.enablebridge)"
+	tortle_bridgeip="$(uci get tortle.bridgeip)"
+	tortle_bridgeport="$(uci get tortle.bridgeport)"	
+	tortle_bridgefingerprint="$(uci get tortle.bridgefingerprint)"
+	tortle_enablehttpproxy="$(uci get tortle.enablehttpproxy)"
+	
+	tortle_httpproxyip="$(uci get tortle.httpproxyip)"
+	tortle_httpproxyport="$(uci get tortle.httpproxyport)"
+	tortle_httpproxyuser="$(uci get tortle.httpproxyuser)"
+	tortle_httpproxypasswd="$(uci get tortle.httpproxypasswd)"
+
+	tortle_enablehttpsproxy="$(uci get tortle.enablehttpsproxy)"
+	tortle_httpsproxyip="$(uci get tortle.httpsproxyip)"
+	tortle_httpsproxyport="$(uci get tortle.httpsproxyport)"
+	tortle_httpsproxyuser="$(uci get tortle.httpsproxyuser)"
+	tortle_httpsproxypasswd="$(uci get tortle.httpsproxypasswd)"
+	tortle_fascistfirewall="$(uci get tortle.fascistfirewall)"
+	tortle_fascistfirewallports="$(uci get tortle.fascistfirewallports)"	
 
 	if [ -e "$tortle_hiddendir/hostname" ]; then
 		tortle_hostname="$(cat $tortle_hiddendir/hostname)"
@@ -65,57 +99,211 @@ function tortlecfg {
 		uci commit tortle
 	else
 	        tortle_hostname="--Please first START TORtle to generate an Onion address--"
-	fi
+	fi	
 }
 
-function configure {
-tortlecfg
-
-dialog --ok-label "Submit" \
-    --help-button \
-    --title "TORtle Configuration" \
-    --form "Gateway + TOR Hidden Service configuration\n\n\
-TORGateway, if enabled, automatically and conveniently tunnels ALL eth0 traffic through TOR Transparent Proxy.\n\n\
-Onion Host sets up a hidden service inside the TOR network. By default it is a TORShell (SSH within TOR)\n\n\
-TOR Proxy is just the regular SOCKS proxy through TOR.\n\
-Forwarding enables/disables LAN Turtle IP forwarding to help prevent leaks for Proxy mode.\n \n" 26 60 7\
-        "Onion Host Enable:       ($tortle_hostname)"	1 1     "$tortle_enablehidden"  1 20 5 0 \
+function hiddenserviceconf {
+dialog --ok-label "Apply" \
+	--title "Hidden Service configurtation" \
+	--form "Onion Host sets up a hidden service inside the TOR network. By default it is a TORShell (SSH within TOR)\n\n" 26 60 10\
+	"Onion Host Enable:       ($tortle_hostname)"	1 1     "$tortle_enablehidden"  1 20 5 0 \
 	"    External Port:"	2 1	"$tortle_tport"   	2 20 5 0 \
-    	"       Local Port:"	3 1	"$tortle_lport"		3 20 5 0 \
-	"TOR Proxy  Enable:"   4 1     "$tortle_enableproxy"   4 20 5 0 \
-	"TransProxy Enable:"	5 1	"$tortle_enabletrans"	5 20 5 0 \
-	"TORGateway Enable:" 	6 1	"$tortle_gateway"	6 20 5 0 \
-	"Forwarding Enable:"   7 1     "$tortle_forwarding"    7 20 5 0 \
-  2>$CONF
-
-  return=$?
-
-  case $return in
+    "       Local Port:"	3 1	"$tortle_lport"		3 20 5 0 \
+    2>$CONF
+    return=$?
+    
+    case $return in
     $DIALOG_OK)
       cat $CONF | { 
 	read -r tortle_enablehidden
-        read -r tortle_tport
-        read -r tortle_lport
+    read -r tortle_tport
+    read -r tortle_lport
+    
+    uci set tortle.enablehidden="$tortle_enablehidden"
+	uci set tortle.tport="$tortle_tport"
+    uci set tortle.lport="$tortle_lport"
+    uci commit tortle
+    rm $CONF
+      }
+    configure;;
+    $DIALOG_CANCEL)
+      rm $CONF
+      clear
+      configure;;
+    esac
+}
+
+function torproxyconf {
+dialog --ok-label "Apply" \
+	--title "Proxy & Gateway configuration" \
+	--form "TORGateway, if enabled, automatically and conveniently tunnels ALL eth0 traffic through TOR Transparent Proxy.\n\n\
+TOR Proxy is just the regular SOCKS proxy through TOR.\n\n\
+Forwarding enables/disables LAN Turtle IP forwarding to help prevent leaks for Proxy mode.\n \n" 26 60 10\
+	"TOR Proxy  Enable:"   1 1     "$tortle_enableproxy"   1 20 5 0 \
+	"TransProxy Enable:"	2 1	"$tortle_enabletrans"	2 20 5 0 \
+	"TORGateway Enable:" 	3 1	"$tortle_gateway"	3 20 5 0 \
+	"Forwarding Enable:"   4 1     "$tortle_forwarding"    4 20 5 0 \
+	2>$CONF
+    return=$?
+    
+    case $return in
+    $DIALOG_OK)
+      cat $CONF | { 
 	read -r tortle_enableproxy
 	read -r tortle_enabletrans
 	read -r tortle_gateway
 	read -r tortle_forwarding
-
-	uci set tortle.enablehidden="$tortle_enablehidden"
-	uci set tortle.tport="$tortle_tport"
-        uci set tortle.lport="$tortle_lport"
-        uci set tortle.enableproxy="$tortle_enableproxy"
-        uci set tortle.enabletrans="$tortle_enabletrans"
+	
+	uci set tortle.enableproxy="$tortle_enableproxy"
+    uci set tortle.enabletrans="$tortle_enabletrans"
 	uci set tortle.gateway="$tortle_gateway"
 	uci set tortle.forwarding="$tortle_forwarding"
-        uci commit tortle
-        rm $CONF
-      };;
+	uci commit tortle
+    rm $CONF
+      }
+    configure;;
     $DIALOG_CANCEL)
       rm $CONF
       clear
-      exit;;
-    $DIALOG_HELP)
+      configure;;
+    esac
+}
+
+function bridgeconf {
+dialog --ok-label "Apply" \
+	--title "Bridge configurtation" \
+	--form "Bridges can be used to avoid blocking of the standard tor relays\n\n" 26 60 10\
+	"   Bridge  Enable:"	1 1	"$tortle_enablebridge"	1 20 5 0 \
+	"   Bridge      IP:"	2 1	"$tortle_bridgeip"	2 20 15 0 \
+	"   Bridge    Port:"	3 1	"$tortle_bridgeport"	3 20 5 0 \
+	"BridgeFingerprint:"	4 1	"$tortle_bridgefingerprint"	4 20 40 0 \
+	2>$CONF
+    return=$?
+    case $return in
+    $DIALOG_OK)
+      cat $CONF | { 
+	read -r tortle_enablebridge
+	read -r tortle_bridgeip
+	read -r tortle_bridgeport
+	read -r tortle_bridgefingerprint
+	
+	uci set tortle.enablebridge="$tortle_enablebridge"			
+	uci set tortle.bridgeip="$tortle_bridgeip"
+	uci set tortle.bridgeport="$tortle_bridgeport"
+	uci set tortle.bridgefingerprint="$tortle_bridgefingerprint"
+	uci commit tortle
+    rm $CONF
+      }
+    configure;;
+    $DIALOG_CANCEL)
+      rm $CONF
+      clear
+      configure;;
+    esac
+}
+
+function httpproxyconf {
+dialog --ok-label "Apply" \
+	--title "HTTP Proxy configuration" \
+	--form "If an HTTP Proxy is used to control internet access is can be configured here.\n\n" 26 60 10\
+	"httpproxy  Enable:"	1 1	"$tortle_enablehttpproxy"	1 20 5 0 \
+	"httpproxy      IP:"	2 1	"$tortle_httpproxyip"	2 20 15 0 \
+	"httpproxy    Port:"	3 1	"$tortle_httpproxyport"	3 20 5 0 \
+	"httpproxy    User:"	4 1	"$tortle_httpproxyuser"	4 20 10 0 \
+	"httpsproxy Passwd:"	5 1	"$tortle_httpproxypasswd"	5 20 15 0 \
+	2>$CONF
+    return=$?
+    case $return in
+    $DIALOG_OK)
+      cat $CONF | { 
+	read -r tortle_enablehttpproxy
+	read -r tortle_httpproxyip
+	read -r tortle_httpproxyport
+	read -r tortle_httpproxyuser
+	read -r tortle_httpproxypasswd
+	
+	uci set tortle.enablehttpproxy="$tortle_enablehttpproxy"
+	uci set tortle.httpproxyip="$tortle_httpproxyip"
+	uci set tortle.httpproxyport="$tortle_httpproxyport"
+	uci set tortle.httpproxyuser="$tortle_httpproxyuser"
+	uci set tortle.httpproxypasswd="$tortle_httpproxypasswd"
+	uci commit tortle
+    rm $CONF
+      }
+    configure;;
+    $DIALOG_CANCEL)
+      rm $CONF
+      clear
+      configure;;
+    esac
+}
+
+function httpsproxyconf {
+dialog --ok-label "Apply" \
+	--title "HTTPS Proxy configuration" \
+	--form "If an HTTPS Proxy is used to control internet access is can be configured here.\n\n" 26 60 10\
+	"httpsproxy  Enable:"	1 1	"$tortle_enablehttpsproxy"	1 20 5 0 \
+	"httpsproxy      IP:"	2 1	"$tortle_httpsproxyip"	2 20 15 0 \
+	"httpsproxy    Port:"	3 1	"$tortle_httpsproxyport"	3 20 5 0 \
+	"httpsproxy    User:"	4 1	"$tortle_httpsproxyuser"	4 20 10 0 \
+	"httpssproxy Passwd:"	5 1	"$tortle_httpsproxypasswd"	5 20 15 0 \
+	2>$CONF
+    return=$?
+    case $return in
+    $DIALOG_OK)
+      cat $CONF | { 
+	read -r tortle_enablehttpsproxy
+	read -r tortle_httpsproxyip
+	read -r tortle_httpsproxyport
+	read -r tortle_httpsproxyuser
+	read -r tortle_httpsproxypasswd
+	
+	uci set tortle.enablehttpsproxy="$tortle_enablehttpsproxy"
+	uci set tortle.httpsproxyip="$tortle_httpsproxyip"
+	uci set tortle.httpsproxyport="$tortle_httpsproxyport"
+	uci set tortle.httpsproxyuser="$tortle_httpsproxyuser"
+	uci set tortle.httpsproxypasswd="$tortle_httpsproxypasswd"
+	uci commit tortle
+    rm $CONF
+      }
+    configure;;
+    $DIALOG_CANCEL)
+      rm $CONF
+      clear
+      configure;;
+    esac
+}
+
+function fascistfirewallconf {
+dialog --ok-label "Apply" \
+	--title "Fascist Firewall configuration" \
+	--form "If firewall is used that restricts all traffic to several ports \n\n\
+	this can be configured here.\n\n" 26 60 10\
+	"Fascist Fw Enable:"	1 1	"$tortle_fascistfirewall"	1 20 5 0 \
+	"Fascist Fw  ports:"	2 1	"$tortle_fascistfirewallports"	2 20 5 0 \
+	2>$CONF
+    return=$?
+    case $return in
+    $DIALOG_OK)
+      cat $CONF | { 
+
+	read -r tortle_fascistfirewall
+	read -r tortle_fascistfirewallports
+
+	uci set tortle.fascistfirewall="$tortle_fascistfirewall"
+	uci set tortle.fascistfirewallports="$tortle_fascistfirewallports"
+    uci commit tortle
+    rm $CONF
+      }
+    configure;;
+    $DIALOG_CANCEL)
+      rm $CONF
+      clear
+      configure;;
+    esac
+}
+
+function helpmsg {
       dialog --title "Help" \
         --msgbox "\
                      TORtle V$tortle_version\n\n\
@@ -131,14 +319,37 @@ TOR Transport is at $tortle_socksip:$tortle_transport\n\
 TOR Dnsport is $tortle_dnsport\n\
 \n\n\n\
 For support, please use the LAN Turtle forum at:\n\n\
-https://forums.hak5.org/index.php?/forum/88-lan-turtle/\n\n\
-I need YOUR feedback to help me improve TORtle!\n\n\
-                                        - Shad.\n" 27 60
+https://forums.hak5.org/index.php?/forum/88-lan-turtle/\n\n\ " 27 60
+     return=$? 
       configure
-      ;;
-    $DIALOG_ESC)
-      clear;;
-  esac
+      clear
+}
+
+function configure {
+tortlecfg
+
+dialog --title "TORtle Configuration" \
+	--menu "Choose feature to configure" 26 60 10 \
+	"Hidden Service"	"Configure Hidden Service" \
+	"Tor Proxy"	"Configure Tor Proxy" \
+	"Tor Bridge"	"Specify a Tor Bridge to be used" \
+	"HTTP Proxy"	"Specify a HTTP Proxy to be used" \
+	"HTTPS Proxy"	"Specify a HTTP Proxy to be used" \
+	"Fascist Firewall"	"Configure Fascist Firewall settings" \
+	"Help" "A short explaination of the module" \
+	"EXIT" "Exists the configuration" \
+	2> $CONF
+result=$(cat $CONF && rm $CONF &>/dev/null)
+case $result in
+    "Hidden Service") hiddenserviceconf;;
+    "Tor Proxy") torproxyconf;;
+    "Tor Bridge") bridgeconf;;
+    "HTTP Proxy") httpproxyconf;;
+    "HTTPS Proxy") httpsproxyconf;;
+    "Fascist Firewall") fascistfirewallconf;;
+    "Help") helpmsg;;
+    "EXIT") exit;;
+esac
 }
 
 function start {
@@ -162,6 +373,10 @@ function start {
 	fi
 
 	(
+	if [ "$tortle_enablebridge" == "1" ]; then
+		echo "Bridge obfs3 $tortle_bridgeip:$tortle_bridgeport $tortle_bridgefingerprint"
+		echo "UseBridges 1"
+	fi
 	echo "User sshd"
 	echo "RunAsDaemon 1"
 	echo "PidFile /var/run/tor.pid"
@@ -185,6 +400,18 @@ function start {
 		echo "ControlListenAddress $tortle_controladdr"
 		echo "ControlPort $tortle_controlport"
 		echo "HashedControlPassword $tortle_hashedpass"
+	fi
+	if [ "$tortle_enablehttpproxy" == "1" ]; then
+		echo "HTTPProxy $tortle_httpproxyip:$tortle_httpproxyport"
+		echo "HTTPProxyAuthenticator $tortle_httpproxyuser:$tortle_httpproxypasswd"
+	fi
+	if [ "$tortle_enablehttpsproxy" == "1" ]; then
+		echo "HTTPSProxy $tortle_httpsproxyip:$tortle_httpsproxyport"
+		echo "HTTPSProxyAuthenticator $tortle_httpsproxyuser:$tortle_httpsproxypasswd"
+	fi
+	if [ "$tortle_fascistfirewall" == "1" ]; then
+		echo "FascistFirewall 1"
+		echo "FirewallPorts $tortle_fascistfirewallports"
 	fi
 	) > /tmp/tortlerc
 	tor -f /tmp/tortlerc
@@ -223,3 +450,4 @@ function status {
 		echo "0"
 	fi
 }
+
