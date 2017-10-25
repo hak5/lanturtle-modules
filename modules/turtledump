@@ -1,0 +1,124 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+
+VERSION="1.0"
+DESCRIPTION="Save tcpdump pcap to remote host"
+AUTHOR="Dylan Smyth"
+CONF=/tmp/turtledump.form
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ITEM_HELP=4}
+: ${DIALOG_ESC=255}
+
+function start {
+touch /tmp/turtledump.pid
+if [ -s /etc/config/turtledump ]
+  then
+    turtledump_host=$(uci get turtledump.rp_host)
+    turtledump_user=$(uci get turtledump.rp_user)
+    turtledump_port=$(uci get turtledump.rp_port)
+    turtledump_filename=$(uci get turtledump.rp_filename)
+    if grep -q $turtledump_host /root/.ssh/known_hosts; then
+      echo "Starting Turtledump..."
+      echo "(tcpdump -i br-lan -w - not host $turtledump_host | ssh -q -t -p $turtledump_port $turtledump_user@$turtledump_host \"cat >> $turtledump_filename\" &)" | at now 2>/dev/null
+      sleep 3 #Give process time to start
+      pgrep -f "ssh -q -t -p $turtledump_port $turtledump_user@$turtledump_host" > /tmp/turtledump.pid
+      echo "Turtledump started with pid: $(cat /tmp/turtledump.pid)"
+    else
+      echo "Host $turtledump_host is not known."
+      echo "Please use keymanager to generate a key for this host."
+    fi
+  else
+    touch /etc/config/turtledump
+    echo "Turtledump is not configured"
+fi
+}
+
+function stop {
+  touch /tmp/turtledump.pid
+  if kill -0 $(cat /tmp/turtledump.pid) 2>/dev/null; then
+    echo "Stopping Turtledump"
+    kill $(cat /tmp/turtledump.pid)
+  else
+    echo "Turtledump not running"
+fi
+}
+
+function status {
+  if [ -s /tmp/turtledump.pid ]; then
+    if kill -0 $(cat /tmp/turtledump.pid) 2>/dev/null; then
+      echo "1"
+    else
+      echo "0"
+    fi
+  else
+    echo "0"
+fi
+}
+
+function configure {
+  if [ -s /etc/config/turtledump ]
+  then
+    turtledump_host=$(uci get turtledump.rp_host)
+    turtledump_user=$(uci get turtledump.rp_user)
+    turtledump_port=$(uci get turtledump.rp_port)
+    turtledump_filename=$(uci get turtledump.rp_filename)
+    
+  else
+    touch /etc/config/turtledump
+    turtledump_port='22'
+    turtledump_filename='turtle.pcap'
+  fi
+
+  dialog --ok-label "Submit" \
+    --help-button \
+    --title "Turtledump Configuration" \
+    --form "Turtledump\n\n\
+Host: IP address of host to establish the SSH connection\n\
+User: User to log in as\n\
+Port: Port the SSH server is running on (Default 22)\n\
+Filename: pcap filename (Default 'turtle.pcap')\n \n" 16 60 4\
+    "Host:"      1 1 "$turtledump_host" 1 14 48 0 \
+    "User:"      2 1 "$turtledump_user" 2 14 48 0 \
+    "Port:"      3 1 "$turtledump_port" 3 14 48 0 \
+    "Filename"   4 1 "$turtledump_filename" 4 14 48 0 \
+  2>$CONF
+
+  return=$?
+  case $return in
+    $DIALOG_OK)
+      cat $CONF | { 
+        read -r turtledump_host
+        read -r turtledump_user
+        read -r turtledump_port
+        read -r turtledump_filename
+        touch /etc/config/turtledump
+        uci set turtledump.rp_host=$turtledump_host
+        uci set turtledump.rp_user=$turtledump_user
+        uci set turtledump.rp_port=$turtledump_port
+        uci set turtledump.rp_filename=$turtledump_filename      
+        uci commit turtledump
+        rm $CONF
+      };;
+    $DIALOG_CANCEL)
+      rm $CONF
+      clear
+      exit;;
+    $DIALOG_HELP)
+      dialog --title "Help" \
+        --msgbox "\
+Turtledump will launch tcpdump and write the captured packets to a pcap file on a remost host via an SSH connection.\n\
+Use the keymanager module to first create an SSH key for the remote host.\n\
+Host: IP address of host to establish the SSH connection\n\
+User: User to log in as\n\
+Port: Port the SSH server is running on (Default 22)\n\
+Filename: Filename for the saved pcap (Default 'turtle.pcap')\n \n
+" 20 60
+      configure
+      ;;
+    $DIALOG_ESC)
+      clear;;
+  esac
+}
