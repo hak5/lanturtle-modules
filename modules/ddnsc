@@ -97,7 +97,7 @@ function stop {
 
 
 function status {
-	if [ "$(uci get ddns.myddns.enabled)" == "1" ]; then
+	if [ "$(uci -q get ddns.myddns.enabled)" == "1" ]; then
 		echo "1"
 	else
 		echo "0"
