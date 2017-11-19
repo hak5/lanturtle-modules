@@ -1,3 +1,3 @@
-Hak5 Lan Turtle Wiki
+Hak5 LAN Turtle Module Repository
 ==================
 
