@@ -14,7 +14,6 @@ CONF=/tmp/openvpn.form
 function start {
   if [ -s /etc/openvpn/my-vpn.conf ]
   then
-    #/etc/init.d/openvpn start
     /usr/sbin/openvpn --daemon --config /etc/openvpn/my-vpn.conf 
     echo -n "openvpn started with pid: "; pidof openvpn
   else
@@ -23,7 +22,7 @@ function start {
 }
 
 function stop {
-  /etc/init.d/openvpn stop
+  killall openvpn
 }
 
 function status {
