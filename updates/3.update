@@ -19,5 +19,5 @@ echo -e "Upgrade file downloaded. Verifying file integrity.\n\n"
         sleep 8 && clear
         killall sshd
 } || {
-        echo -e "MD5 checksum missmatch. Please try again."
+        echo -e "SHA256 checksum missmatch. Please try again."
 }
