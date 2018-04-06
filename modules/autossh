@@ -12,7 +12,7 @@ CONF=/tmp/autossh.form
 : ${DIALOG_ESC=255}
 
 function start {
-  autossh_host=$(uci show autossh.@autossh[0].ssh | awk '{print $7}' | sed 's/@/ /g' | awk '{print $2}')
+  autossh_host=$(uci show autossh.@autossh[0].ssh | awk '{print $7}' | sed 's/@/ /g' | awk '{print $2}' | sed s/\'//)
   touch /root/.ssh/known_hosts
   if grep $autossh_host /root/.ssh/known_hosts; then
     /etc/init.d/autossh start
@@ -32,8 +32,8 @@ function status {
 function configure {
   if [ -s /etc/config/autossh ]
   then
-    autossh_host=$(uci show autossh.@autossh[0].ssh | awk '{print $7}')
-    autossh_port=$(uci show autossh.@autossh[0].ssh | awk '{print $9}')
+    autossh_host=$(uci show autossh.@autossh[0].ssh | awk '{print $7}' | sed s/\'//)
+    autossh_port=$(uci show autossh.@autossh[0].ssh | awk '{print $9}' | sed s/\'//)
     autossh_remoteport=$(uci show autossh.@autossh[0].ssh | awk '{print $6}' | sed 's/:/ /g' | awk '{print $1}')
     autossh_localport=$(uci show autossh.@autossh[0].ssh | awk '{print $6}' | sed 's/:/ /g' | awk '{print $3}')
   else
@@ -58,7 +58,7 @@ Local Port:  Local port to bind tunnel (Default 22)\n \n" 16 60 4\
 
   case $return in
     $DIALOG_OK)
-      cat $CONF | { 
+      cat $CONF | {
         read -r autossh_host
         read -r autossh_port
         read -r autossh_remoteport
