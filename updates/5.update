@@ -1,0 +1,23 @@
+function sha256sum() {
+    python -sBc "import hashlib;print hashlib.sha256(open('$1','rb').read()).hexdigest()"
+}
+
+
+echo -e "Update Available. Install will begin in 15 seconds...\n\n"
+echo -e "All local LAN Turtle data will be erased.\n\n"
+echo -e "Press CTRL+C to CANCEL\n\n"
+sleep 15
+echo -e "Downloading Upgrade file, please wait.\n\n"
+wget -q -O /tmp/upgrade.bin http://downloads.lanturtle.com/turtle-5.bin
+echo -e "Upgrade file downloaded. Verifying file integrity.\n\n"
+[[ "$(sha256sum /tmp/upgrade.bin)" == "fe32ca3bb09e26f0bead326bb5dd2f13b1b60d15530cde696afb90a36ad31b92" ]] && {
+        echo -e "DO NOT UNPLUG OR POWER DOWN THE LAN TURTLE\n\n"
+        echo -e "Upgrade in progress. Please wait ~5 minutes.\n"
+        echo -e "The LAN Turtle will reboot when the upgrade is complete.\n"
+        echo -e "This SSH session will now close.\n"
+        echo "sleep 10 && sysupgrade -n /tmp/upgrade.bin" | at now &> /dev/null
+        sleep 8 && clear
+        killall sshd
+} || {
+        echo -e "SHA256 checksum missmatch. Please try again."
+}
