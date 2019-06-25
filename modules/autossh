@@ -64,7 +64,7 @@ Local Port:  Local port to bind tunnel (Default 22)\n \n" 16 60 4\
         read -r autossh_remoteport
         read -r autossh_localport
         touch /etc/config/autossh
-        uci set autossh.@autossh[0].ssh="-i /root/.ssh/id_rsa -N -T -R "$autossh_remoteport":localhost:"$autossh_localport" "$autossh_host" -p "$autossh_port""
+        uci set autossh.@autossh[0].ssh="-i /root/.ssh/id_rsa -N -T -R "$autossh_remoteport":localhost:"$autossh_localport" "$autossh_host" -p "$autossh_port" "
         uci commit autossh
         rm $CONF
       };;
