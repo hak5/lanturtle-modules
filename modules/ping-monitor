@@ -188,10 +188,12 @@ Target: host to ping.\n" 16 60 1\
     $DIALOG_HELP)
       dialog --title "Help" \
         --msgbox " \
-ping-monitor will send continuous ping requests to a target host and record the responses to the \
-local filesystem. Every 5 minutes, it will attempt to move the log of response data from the \
-local filesystem to a remote filesystem over sshfs. Therefore, this module requires that the \
-sshfs module be installed, configured, and started. \
+ping-monitor will send continuous ping requests to a target host and record the timestamped \
+responses to the local filesystem. Every 5 minutes, it will attempt to move the response data \
+from the local filesystem to a remote filesystem over sshfs. Therefore, this module requires \
+that the sshfs module be installed, configured, and started. \n\n \
+For analyzing the data, use any of your favorite tools like sed, awk, find, and python. \n\n \
+For some out-of-the-box examples, look at https://github.com/mmdj4u/lan-turtle-heaven.git \
 " 20 60
       configure
       ;;
