@@ -193,7 +193,7 @@ responses to the local filesystem. Every 5 minutes, it will attempt to move the 
 from the local filesystem to a remote filesystem over sshfs. Therefore, this module requires \
 that the sshfs module be installed, configured, and started. \n\n \
 For analyzing the data, use any of your favorite tools like sed, awk, find, and python. \n\n \
-For some out-of-the-box examples, look at https://github.com/mmdj4u/lan-turtle-heaven.git \
+For some out-of-the-box examples, look at https://github.com/mmdj4u/lan-turtle-heaven \
 " 20 60
       configure
       ;;
