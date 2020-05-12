@@ -1,5 +1,5 @@
 #!/bin/bash /usr/lib/turtle/turtle_module
-VERSION="1.1"
+VERSION="1.2"
 DESCRIPTION="URL Snarf sniffs HTTP traffic"
 CONF=/tmp/urlsnarf.form
 
@@ -33,6 +33,10 @@ function start {
         echo "urlsnarf -n -i br-lan" | at now
         echo urlsnarf started with pid $(pidof urlsnarf)
         ;;
+      sdcard)
+        echo "urlsnarf -n -i br-lan > /sd/urlsnarf_$DATE.log" | at now
+        echo urlsnarf started with pid $(pidof urlsnarf)
+        ;;
     esac
   else
     echo "URLSnarf not configured."
@@ -63,10 +67,11 @@ function configure {
     --help-button \
     --title "URLSnarf Configuration" \
     --radiolist "\n\
-urlsnarf outputs all requested URLs sniffed from HTTP traffic in CLF (Common Log Format, used by most web servers), suitable for offline post-processing with web log analysis tool (analog, wwwstat, etc.)...\n\nUse [Space] to select choice.\n" 16 60 3\
+urlsnarf outputs all requested URLs sniffed from HTTP traffic in CLF (Common Log Format, used by most web servers), suitable for offline post-processing with web log analysis tool (analog, wwwstat, etc.)...\n\nUse [Space] to select choice.\n" 16 60 4\
     1 "Save log to SSHFS if available." off\
     2 "Save log to /tmp/" off\
     3 "Do not save log file." on\
+    4 "Save log to /sd/" off\
   2>$CONF
 
   return=$?
@@ -85,6 +90,10 @@ urlsnarf outputs all requested URLs sniffed from HTTP traffic in CLF (Common Log
           ;;
         3)
           uci set urlsnarf.log="none"
+          uci commit urlsnarf
+          ;;
+        4)
+          uci set urlsnarf.log="sdcard"
           uci commit urlsnarf
           ;;
       esac
