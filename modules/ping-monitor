@@ -62,7 +62,7 @@ function start_ping {
 }
 
 function move {
-  local dt="$(date +%Y%d%d-%H%M%S)"
+  local dt="$(date +%Y%m%d-%H%M%S)"
   local dp="/root/ping_monitor.${dt}"
 
   if [ -f ${sp} ]; then
