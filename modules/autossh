@@ -26,7 +26,7 @@ function stop {
 }
 
 function status {
-  if pgrep autossh > /dev/null; then echo "1"; else echo "0"; fi
+  if pgrep /usr/sbin/autossh > /dev/null; then echo "1"; else echo "0"; fi
 }
 
 function configure {
