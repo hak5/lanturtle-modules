@@ -1,0 +1,203 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+
+VERSION="1.0"
+DESCRIPTION="Sends ping response data to a SSHFS host"
+CONF=/tmp/ping-monitor.form
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ITEM_HELP=4}
+: ${DIALOG_ESC=255}
+
+sp="/root/ping_monitor.output"
+pf="/var/run/ping-monitor.pid"
+
+function set_globals {
+    if [ -s /etc/config/ping-monitor ]
+    then
+        target=$(uci get ping-monitor.target)
+    else
+        touch /etc/config/ping-monitor
+        echo "ping-monitor not configured"
+        return 1
+    fi
+}
+
+function check_sshfs {
+  cat /etc/mtab | awk '{print $2}' | grep -e '^/sshfs'
+  return $?
+}
+
+function stop_ping {
+  pingpid=$(ps | grep -v grep | grep 'ping '"${target}" | awk '{print $1}')
+  kill -2 ${pingpid}
+  while kill -0 ${pingpid} > /dev/null 2>&1; do sleep 0.1; done
+}
+
+function start_ping {
+  case "$(status)" in
+    1)
+      # Already running
+      return 1
+    ;;
+    *)
+      :
+    ;;
+  esac
+
+  check_sshfs > /dev/null 2>&1
+  if [ $? -eq 0 ]; then
+    find /root -type f -name "ping_monitor.*" -exec mv {} /sshfs \;
+  fi
+
+  ping ${target} | while read pong; do echo "$(date '+%Y-%m-%d %H:%M:%S') ${pong}"; done > ${sp} &
+  local pid=$!
+  echo ${pid} > ${pf}
+
+  echo "ping-monitor started with pid: ${pid}"
+
+  return 0
+}
+
+function move {
+  local dt="$(date +%Y%m%d-%H%M%S)"
+  local dp="/root/ping_monitor.${dt}"
+
+  if [ -f ${sp} ]; then
+    mv ${sp} ${dp} # atomic?
+  fi
+
+  check_sshfs > /dev/null 2>&1
+  if [ $? -eq 0 ]; then
+    test -f ${dp} && mv ${dp} /sshfs
+  fi
+
+}
+
+function rotate {
+  stop_ping
+  move
+  start_ping
+}
+
+function start {
+  set_globals || exit 1
+  start_ping
+  case $? in
+    2)
+      exit 1
+    ;;
+    1)
+      # It's already running. Let's sigint and rotate.
+      rotate
+    ;;
+    *)
+      :
+    ;;
+  esac
+  if [ -f /var/spool/cron/crontabs/root ]; then
+    grep '\*/5 \* \* \* \* /etc/turtle/modules/ping-monitor start' /var/spool/cron/crontabs/root > /dev/null || {
+      echo '*/5 * * * * /etc/turtle/modules/ping-monitor start' >> /var/spool/cron/crontabs/root
+      /etc/init.d/cron reload
+    }
+  fi
+
+  check_sshfs > /dev/null 2>&1
+  if [ $? -ne 0 ]; then
+    >&2 echo "sshfs is not mounted"
+    if [ "$(/etc/turtle/modules/sshfs status)" != "Running." ]; then
+      /etc/turtle/modules/sshfs start
+    fi
+  fi
+}
+
+function stop {
+  set_globals || exit 1
+
+  sed -i '/\*\/5 \* \* \* \* \/etc\/turtle\/modules\/ping-monitor start/d' /var/spool/cron/crontabs/root
+  /etc/init.d/cron reload
+
+  stop_ping
+
+  # Attempt to move the last log
+  move
+}
+
+function status {
+  if [ -f ${pf} ]; then
+    pid="$(head -n1 ${pf})"
+
+    kill -0 ${pid} > /dev/null 2>&1 
+    if [ $? -eq 0 ]; then
+        if [ "ping-monitor" == "$(cat /proc/${pid}/comm)" ]; then
+            echo "1";
+            return 0
+        fi
+    fi
+  fi
+  echo "0"
+}
+
+function configure {
+  if [ ! -f /etc/turtle/modules/sshfs ]; then
+    echo "dependency module sshfs is not installed."
+    return 1
+  fi
+  check_sshfs > /dev/null 2>&1
+  if [ $? -ne 0 ]; then
+    echo "sshfs is not mounted."
+    return 1
+  fi
+  if [ -s /etc/config/ping-monitor ]
+  then
+    target=$(uci get ping-monitor.target)
+  else
+    touch /etc/config/ping-monitor
+  fi
+
+  dialog --ok-label "Submit" \
+    --help-button \
+    --title "ping-monitor configuration" \
+    --form "Send ping data to a remote host (requires sshfs module)\n\n\
+Target: host to ping.\n" 16 60 1\
+    "Target:"	1 1	"${target}"	1 9 54 0 \
+  2>$CONF
+
+  return=$?
+
+  case $return in
+    $DIALOG_OK)
+      cat $CONF | { 
+        read -r target
+        
+        if [ -z "$target" ]; then
+          target="8.8.8.8"
+        fi
+        touch /etc/config/ping-monitor
+        uci set ping-monitor.target="$target"
+        uci commit ping-monitor
+        rm $CONF
+        clear
+      };;
+    $DIALOG_CANCEL)
+      rm $CONF
+      clear
+      exit;;
+    $DIALOG_HELP)
+      dialog --title "Help" \
+        --msgbox " \
+ping-monitor will send continuous ping requests to a target host and record the timestamped \
+responses to the local filesystem. Every 5 minutes, it will attempt to move the response data \
+from the local filesystem to a remote filesystem over sshfs. Therefore, this module requires \
+that the sshfs module be installed, configured, and started. \n\n \
+For analyzing the data, use any of your favorite tools like sed, awk, find, and python. \n\n \
+For some out-of-the-box examples, look at https://github.com/mmdj4u/lanturtle-heaven \
+" 20 60
+      configure
+      ;;
+    $DIALOG_ESC)
+      clear;;
+  esac
+}

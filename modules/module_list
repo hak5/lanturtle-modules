@@ -1,26 +1,24 @@
 autossh Maintain persistent secure shells
+clomac Clone Clients MAC address into WAN interface
 cron Schedule tasks
+ddnsc Dynamic Domain Name Service
 dns-spoof Forges replies to arbitrary DNS address
 dnsmasq-spoof DNSSpoof using DNSMasq
 follow-file Follow log printing data as file grows
+iodine Creates a DNS Tunnel using iodine 
 keymanager SSH Key Manager
-meterpreter Metasploit payload to maintain shells
+meterpreter-https Metasploit HTTPS payload for more discrete shells
 modulemanager Manage Modules
 netcat-revshell NetCat Reverse Shell
 nmap-scan Network Mapper discovers hosts and services on a network
 openvpn Openvpn client
 ptunnel Proxies TCP over Ping (ICMP) traffic
+quickcreds Snag creds from locked machines -Mubix, Room362.com
+responder Responder - LLMNR, NBT-NS and MDNS poisoner
 script2email Email script output via SMTP
 script2http Post script output via HTTP
 sshfs Mounts remote File Systems over SSH
+tortle TOR Turtle Gateway TOR hidden SHELL Service
+upnp-portfwd uPnP Port Forwarding
 uptime System Uptime
 urlsnarf Sniffs HTTP URL traffic
-clomac Clone Clients MAC address into WAN interface
-upnp-portfwd uPnP Port Forwarding
-ddnsc Dynamic Domain Name Service
-tortle TOR Turtle Gateway TOR hidden SHELL Service
-meterpreter-sl Stageless Metasploit payload to maintain shells
-responder Responder - LLMNR, NBT-NS and MDNS poisoner
-QuickCreds Snag creds from locked machines -Mubix, Room362.com
-iodine Creates a DNS Tunnel using iodine 
-meterpreter-https Metasploit HTTPS payload for more discrete shells

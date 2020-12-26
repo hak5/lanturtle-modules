@@ -1,6 +1,6 @@
 #!/bin/bash /usr/lib/turtle/turtle_module
 VERSION="1.0"
-DESCRIPTION="Metasploit payload to maintain shells"
+DESCRIPTION="Deprecated - requires firmware v6.1 or below. Metasploit payload to maintain shells."
 CONF=/tmp/meterpreter.form
 
 : ${DIALOG_OK=0}

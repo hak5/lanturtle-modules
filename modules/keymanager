@@ -1,5 +1,5 @@
 #!/bin/bash /usr/lib/turtle/turtle_module
-VERSION="1.1"
+VERSION="1.2"
 DESCRIPTION="SSH Key Manager"
 EXECUTABLE="0"
 CONF=/tmp/keymanager.form
@@ -10,8 +10,6 @@ CONF=/tmp/keymanager.form
 : ${DIALOG_EXTRA=3}
 : ${DIALOG_ITEM_HELP=4}
 : ${DIALOG_ESC=255}
-
-
 
 function generate_key {
   dialog --title "Generate New SSH Key Pair?" \
@@ -30,10 +28,6 @@ case $? in
   1) configure ;;
 esac
 }
-
-
-
-
 
 function copy_key {
   dialog --ok-label "Submit" \
@@ -54,9 +48,6 @@ User: User on remote SSH server.\n \n" 17 60 3\
         read -r copy_host
         read -r copy_port
         read -r copy_user
-        read -r copy_pass
-
-
 
         if [ -z "$copy_host" ]; then
           dialog --title "Notice" --msgbox "Host Required" 5 60; copy_key
@@ -67,21 +58,6 @@ User: User on remote SSH server.\n \n" 17 60 3\
         if [ -z "$copy_user" ]; then
           dialog --title "Notice" --msgbox "User Required" 5 60; copy_key
         fi
-        touch /root/.ssh/known_hosts
-        if ! grep -q $copy_host /root/.ssh/known_hosts; then
-          dialog --title "Notice" --msgbox "Cannot find $copy_host in known_hosts. Adding it now." 6 60
-          ssh-keyscan -p "$copy_port" "$copy_host" 2>/dev/null > /tmp/tmp_hosts
-          cat /tmp/tmp_hosts >> /root/.ssh/known_hosts
-          NEWHOST=$(cat /tmp/tmp_hosts)
-          if [[ -s /tmp/tmp_hosts ]]; then
-            dialog --title "Notice" --msgbox "Added the following to /root/.ssh/known_hosts:\n\n$NEWHOST" 18 60
-          else
-            dialog --title "Notice" --msgbox "There was an error retrieving the key fingerprint" 8 60
-            copy_key
-          fi;
-          rm /tmp/tmp_hosts
-        fi
-
         rm /tmp/empty_* &>/dev/null
         ssh-copy-id -i /root/.ssh/id_rsa.pub -p "$copy_port" "$copy_user"@"$copy_host"
         configure
@@ -91,44 +67,9 @@ User: User on remote SSH server.\n \n" 17 60 3\
   esac 
 }
 
-
-
-
-
-
 function add_host {
-  dialog --ok-label "Submit" \
-    --title "Add Remote Server to Known Hosts List" \
-    --form "This utility will add the remote SSH servers key fingerprint to the local known hosts file.\n \n\
-Host: Remote SSH Server.\n\
-Port: Remote SSH Server Port (Typically 22).\n \n" 14 60 2\
-    "Host:"     1 1     "$add_host"   1 7 48 0 \
-    "Port:"     2 1     "$add_port"   2 7 48 0 \
-  2>$CONF
-  return=$?
-
-  case $return in
-    0)
-      cat $CONF | {
-        read -r add_host
-        read -r add_port
-        if [ -z "$add_port" ]; then
-          add_port="22"
-        fi
-        ssh-keyscan -p "$add_port" "$add_host" > /tmp/tmp_hosts 
-        cat /tmp/tmp_hosts >> /root/.ssh/known_hosts
-        NEWHOST=`cat /tmp/tmp_hosts`
-        if [[ -s /tmp/tmp_hosts ]]; then
-          dialog --title "Notice" --msgbox "Added the following to /root/.ssh/known_hosts:\n\n$NEWHOST" 18 60
-        else
-          dialog --title "Notice" --msgbox "There was an error retrieving the key fingerprint" 8 60
-        fi;
-        rm /tmp/tmp_hosts
-        configure
-      };;
-    1) configure;;
-    255) configure;;
-  esac
+  dialog --title "Notice" --msgbox "This function is deprecated and is now served by copy_key. This notice exists for documentation consistency. Please run copy_key." 8 60
+  configure
 }
 
 function review {
@@ -155,5 +96,3 @@ function configure {
     "back") exit;;
   esac
 }
-
-

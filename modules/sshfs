@@ -32,7 +32,7 @@ function stop {
 }
 
 function status {
-  if pgrep sshfs > /dev/null; then echo "1"; else echo "0"; fi
+  if pgrep /usr/bin/sshfs > /dev/null; then echo "1"; else echo "0"; fi
 }
 
 function configure {

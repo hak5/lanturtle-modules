@@ -4,7 +4,7 @@
 # http://imcpwn.com
 
 VERSION="2.1"
-DESCRIPTION="Stageless Metasploit payload to maintain shells"
+DESCRIPTION="Deprecated - requires firmware v6.1 or below. Stageless Metasploit payload to maintain shells"
 CONF=/tmp/meterpreter-sl.form
 AUTHOR=IMcPwn
 
