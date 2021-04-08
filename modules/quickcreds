@@ -1,9 +1,7 @@
 #!/bin/bash /usr/lib/turtle/turtle_module
-VERSION="1.3-KoalaV2"
+VERSION="1.4"
 DESCRIPTION="Snagging creds from locked machines --Mubix, Room362.com. Implements responder attack and saves creds to numbered directories in /root/loot. LED will blink while QuickCreds is running. Upon capture of NTLM hash the LED will light solid. Author: Hak5Darren. Credit: Mubix."
 CONF=/tmp/QuickCreds.form
-# Original file:
-# https://github.com/hak5/lanturtle-modules/blob/gh-pages/modules/quickcreds
 
 # All "dialog" functionality is related to the Turtle "GUI"
 : ${DIALOG_OK=0}
@@ -22,22 +20,14 @@ RESPURL="https://github.com/lgandx/Responder/archive/master.zip"
 RESPLOGDIR=$RESPROOT/"Responder/logs"
 SLEEPTIMER="1" # Don't set this to less than 1 (one) if using a LAN Turtle with a yellow LED
 
-# Check what type of controllable LED that is available, either yellow or orange/amber
-LEDFILE=/sys/class/leds/turtle\:yellow\:system/brightness
-if [[ ! -f "$LEDFILE" ]]; then
-    # The files to control the yellow LED is absent, use the orange/amber variant
-    LEDYELLOW=0
-else
-    LEDYELLOW=1
-fi
-
 # Function called from the Turtle module "GUI" to configure/setup quickcreds
 function configure {
     # If SD card is mounted continue if not fail due to not enough space.
     if grep -qs $RESPROOT /proc/mounts; then
             /bin/echo "SD card is mounted."
      else
-          /usr/bin/dialog --title "QuickCreds" --msgbox "A SD card is not mounted on your turtle, if possible insert and mount a SD card. \n\If that's not possible this program can't function properly." 9 72
+          /usr/bin/dialog --title "QuickCreds" --msgbox "A SD card is not mounted on your turtle, if possible insert and mount a SD card. \n\
+              If that's not possible this program can't function properly." 9 72
           exit 1
     fi
 
@@ -125,14 +115,8 @@ function configure {
 
 # Function called from within this script file, therefore it needs to be positioned before the code that calls the function (bash basics...)
 function finished {
-    if [[ $((LEDYELLOW)) == 0 ]]; then
-        /bin/echo 255 > /sys/class/leds/lan-turtle\:orange\:system/brightness 2>&1
-    else
-        /bin/echo 255 > /sys/class/leds/turtle\:yellow\:system/brightness 2>&1
-    fi
-	
-    /bin/sync
-    
+    /bin/echo 255 > /sys/class/leds/lan-turtle\:orange\:system/brightness 2>&1	
+    /bin/sync 
     exit
 }
 
@@ -143,13 +127,8 @@ function start {
 	/etc/init.d/dhcp_detect stop
 	/bin/echo ""
 	/bin/echo "QuickCreds started."
-    if [[ $((LEDYELLOW)) == 0 ]]; then
-        /bin/echo "The orange/amber LED will blink while QuickCreds is running."
-        /bin/echo "The orange/amber LED will turn solid upon NTLM hash capture."
-    else
-        /bin/echo "The yellow LED will blink while QuickCreds is running."
-        /bin/echo "The yellow LED will turn solid upon NTLM hash capture."
-    fi
+    /bin/echo "The orange/amber LED will blink while QuickCreds is running."
+    /bin/echo "The orange/amber LED will turn solid upon NTLM hash capture."
 	/bin/echo ""
 	/bin/echo "If starting this module from the Turtle Shell menu,"
 	/bin/echo "press CTRL+C to return."
@@ -193,19 +172,10 @@ function start {
             # Call "finished" function
             finished
         fi
-
-        if [[ $((LEDYELLOW)) == 0 ]]; then
-            /bin/echo 255 > /sys/class/leds/lan-turtle\:orange\:system/brightness 2>&1
-            /bin/sleep $SLEEPTIMER
-            /bin/echo 0 > /sys/class/leds/lan-turtle\:orange\:system/brightness 2>&1
-            /bin/sleep $SLEEPTIMER
-        else
-            /bin/echo 255 > /sys/class/leds/turtle\:yellow\:system/brightness 2>&1
-            /bin/sleep $SLEEPTIMER
-            /bin/echo 0 > /sys/class/leds/turtle\:yellow\:system/brightness 2>&1
-            /bin/sleep $SLEEPTIMER
-        fi
-
+        /bin/echo 255 > /sys/class/leds/lan-turtle\:orange\:system/brightness 2>&1
+        /bin/sleep $SLEEPTIMER
+        /bin/echo 0 > /sys/class/leds/lan-turtle\:orange\:system/brightness 2>&1
+        /bin/sleep $SLEEPTIMER 
 	done
 }
 
