@@ -125,9 +125,9 @@ if [ $(grep -v '\$:' /etc/turtle/Responder/logs/*NTLM* 2>/dev/null) ];
       finished
     fi
 fi
-    echo 255 > /sys/class/leds/turtle\:yellow\:system/brightness 2>&1
+    echo 255 > /sys/class/leds/lan-turtle\:orange\:system/brightness 2>&1
     sleep 1
-    echo 0 > /sys/class/leds/turtle\:yellow\:system/brightness 2>&1
+    echo 0 > /sys/class/leds/lan-turtle\:orange\:system/brightness 2>&1
     sleep 1
 done
 }
