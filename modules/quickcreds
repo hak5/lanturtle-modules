@@ -18,7 +18,7 @@ RESPROOT="/sd"
 RESPTEMPDL="/tmp/ResponderDownload/"
 RESPURL="https://github.com/lgandx/Responder/archive/master.zip"
 RESPLOGDIR=$RESPROOT/"Responder/logs"
-SLEEPTIMER="1" # Don't set this to less than 1 (one) if using a LAN Turtle with a yellow LED
+SLEEPTIMER="1"
 
 # Function called from the Turtle module "GUI" to configure/setup quickcreds
 function configure {
@@ -93,20 +93,14 @@ function configure {
         /usr/bin/wget --progress=dot "$RESPURL" -P "$RESPTEMPDL" 2>&1 | /usr/bin/dialog --progressbox "Download dependency responder" 14 72
         # Unpack the GitHub download
         /usr/bin/unzip "$RESPTEMPDL"master.zip -d "$RESPTEMPDL" 2>&1 | /usr/bin/dialog --progressbox "Unpacking dependency responder" 14 72
-        # Remove non needed exe files
         /bin/rm "$RESPTEMPDL"Responder-master/tools/MultiRelay/bin/*.exe
-        # Rename the unpacked Responder directory
         /bin/mv "$RESPTEMPDL"Responder-master "$RESPTEMPDL"Responder
-        # Move the unpacked and renamed Responder directory to /etc/turtle
         /bin/mv "$RESPTEMPDL"Responder "$RESPROOT"
-        # Delete the downloaded GitHub zip file
         /bin/rm -rf "$RESPTEMPDL"master.zip*
     fi
 
     # Setup loot directory and complete setup
     /bin/mkdir -p "$LOOTDIR"
-    # Skip touching the log file since we want to add to it between the runs, not create a new one every time quickcreds is executed
-    #/bin/touch "$RESPLOG"
 
     /usr/bin/dialog --title "QuickCreds" --msgbox "\n\
     Configuration complete. Creds will be saved to $LOOTDIR\n\
