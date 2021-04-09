@@ -148,7 +148,6 @@ function start {
             /bin/echo "Creds$((dircount)) - Creds obtained and saved" >> $RESPLOG
             #Copy all responder logs to loot directory
             /bin/echo "Creds$((dircount)) - Copying the Responder native logs to loot directory" >> $RESPLOG
-            # !!! CHECK THIS! ISN'T THIS "OVERKILL", THERE'S ALREADY A SYMBOLIC LINK ESTABLISHED BETWEEN THESES DIRS! FILES SHOULD ALREADY BE THERE!!!
             /bin/cp $RESPLOGDIR/* $LOOTDIR"Creds"$((dircount))
             /bin/echo "Creds$((dircount)) - Calling the finished function" >> $RESPLOG
             finished
