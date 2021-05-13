@@ -43,13 +43,21 @@ function configure {
         exit 1
     fi
 
-    # Check for Internet connection
-    /bin/ping -q -w 5 -c 1 www.google.com &> /dev/null && {
-        :
-    } || {
-        /usr/bin/dialog --title "QuickCreds" --msgbox "\nThe LAN Turtle is currently offline.\nPlease connect the LAN Turtle to the Internet and try again." 9 72
+    # Check for Internet connection by attempting to contact an opkg repository server
+
+    # First, extract a server URL from distfeeds.conf
+    opkg_baseurl=$(sed -E -n "s/^[^#]*(http:\/\/[^\/]*)\/.*/\1/p;q" /etc/opkg/distfeeds.conf) &> /dev/null
+    if [[ $? -ne 0 ]]; then
+        /usr/bin/dialog --title "QuickCreds" --msgbox "\nCould not extract an opkg repo from distfeeds.conf\n\nIf this is unexpected, you may need to upgrade or restore the firmware." 9 72
         exit 1
-    }
+    fi
+
+    # ...then, use wget to determine if the server can be reached
+    wget -q --spider "$opkg_baseurl" &> /dev/null
+    if [[ $? -ne 0 ]]; then
+        /usr/bin/dialog --title "QuickCreds" --msgbox "\nThe LAN Turtle could not connect to $output\nPlease connect the LAN Turtle to the Internet and try again." 9 72
+        exit 1
+    fi
 
     # Install dependencies
     /bin/opkg update | /usr/bin/dialog --progressbox "Updating opkg" 14 72
