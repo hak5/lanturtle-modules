@@ -8,8 +8,10 @@
 # Target:        N/A
 # Attackmodes:   N/A
 
+# Constants
 VERSION="1.0"
 DESCRIPTION="Simplified SD card storage"
+REQUIRED_PACKAGES="block-mount kmod-fs-ext4 e2fsprogs fdisk"
 CONF=/tmp/extroot.form
 
 # All "dialog" functionality is related to the Turtle shell
@@ -21,6 +23,125 @@ CONF=/tmp/extroot.form
 : ${DIALOG_ESC=255}
 
 function configure {
+}
+
+function check_network {
+    # Check for Internet connection by attempting to contact an opkg repository server
+
+    # First, extract a server URL from distfeeds.conf
+    opkg_baseurl=$(sed -E -n "s/^[^#]*(http:\/\/[^\/]*)\/.*/\1/p;q" /etc/opkg/distfeeds.conf) &> /dev/null
+    if [[ $? -ne 0 ]]; then
+        /usr/bin/dialog --title "Extroot" --msgbox "\nCould not extract an opkg repo from distfeeds.conf\n\nIf this is unexpected, you may need to upgrade or restore the firmware." 9 72
+        exit 1
+    fi
+
+    # ...then, use wget to determine if the server can be reached
+    wget -q --spider "$opkg_baseurl" &> /dev/null
+    if [[ $? -ne 0 ]]; then
+        /usr/bin/dialog --title "Extroot" --msgbox "\nThe LAN Turtle could not connect to $output\nPlease connect the LAN Turtle to the Internet and try again." 9 72
+        exit 1
+    fi
+}
+
+function install_dependencies {
+    /bin/opkg update | /usr/bin/dialog --progressbox "Updating opkg" 14 72
+
+    /bin/opkg install $REQUIRED_PACKAGES | /usr/bin/dialog --progressbox "Checking/installing dependencies" 14 72
+}
+
+function remount_rootfsdata {
+    #TODO: Add sanity check for the overlay having already been migrated
+
+    # Identify flash memory device containing current overlay
+    rootfsdata_dev="$(sed -n -e "/\s\/overlay\s.*$/s///p" /etc/mtab)"
+
+    # Create remount entry
+    uci -q delete fstab.rwm
+    uci set fstab.rwm="mount"
+    uci set fstab.rwm.device="${rootfsdata_dev}"
+    uci set fstab.rwm.target="/rwm"
+    uci commit fstab
+}
+
+function format_sdcard {
+    # Identify our storage device
+    sdcard_device=$(ls /dev/sd* 2> /dev/null | head -n1)
+
+    # Check SD card presence
+    [[ "$(ls /dev/sd* 2> /dev/null | wc -l)" == "0" ]] && {
+        echo "No SD card inserted or device not supported"
+        exit 1
+    }
+
+    # Unmount storage as applicable
+    block umount &> /dev/null
+
+    # Partition SD card for storage and swap
+    echo -e "o\nn\np\n2\n\n+1024M\nn\np\n1\n\np\n\nw\n" | fdisk $sdcard_device
+    echo y | mkfs.ext4 ${sdcard_device}1
+    mkswap ${sdcard_device}2
+
+    # Restart the storage bus
+    echo "1-0:1.0" > /sys/bus/usb/drivers/hub/unbind
+    echo "1-0:1.0" > /sys/bus/usb/drivers/hub/bind
+    sleep 3
+
+    # Commit/activate swap and remove existing SD card mounts
+    block detect > /etc/config/fstab
+    uci -q delete fstab.@mount[0]
+    uci commit fstab
+    block mount &> /dev/null
+}
+
+function make_extroot {
+    # Identify our storage partition
+    sdcard_device=$(ls /dev/sd* 2> /dev/null | head -n1)1
+
+    # Identify the partition's UUID
+    eval $(block info ${sdcard_device} | grep -o -e "UUID=\S*")
+
+    # Delete and recreate the overlay fstab entry
+    uci -q delete fstab.overlay
+    uci set fstab.overlay="mount"
+    uci set fstab.overlay.uuid="${UUID}"
+    uci set fstab.overlay.target="/overlay"
+    uci commit fstab
+}
+
+function migrate_overlay {
+    # Identify our storage partition
+    sdcard_device=$(ls /dev/sd* 2> /dev/null | head -n1)1
+
+    # Create a temporary mount point directory
+    mkdir -p /tmp/cproot
+
+    # Bind the current overlay to the mount point
+    mount --bind /overlay /tmp/cproot
+
+    # Mount the new overlay storage
+    mount ${sdcard_device} /mount
+
+    # Copy over the data
+    tar -C /tmp/cproot -cvf - . | tar -C /mnt -xf -	
+
+    # Unmount the new overlay and temporary mount point
+    umount /tmp/cproot /mnt
+}
+
+function perform_migration {
+    check_network
+
+    install_dependencies
+
+    remount_rootfsdata
+
+    format_sdcard
+
+    make_extroot
+
+    migrate_overlay
+
+    reboot
 }
 
 function start {
