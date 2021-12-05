@@ -2,6 +2,7 @@ autossh Maintain persistent secure shells
 cron Schedule tasks
 dns-spoof Forges replies to arbitrary DNS address
 dnsmasq-spoof DNSSpoof using DNSMasq
+extroot Simplified SD card storage
 follow-file Follow log printing data as file grows
 keymanager SSH Key Manager
 meterpreter Metasploit payload to maintain shells

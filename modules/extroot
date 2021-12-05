@@ -1,0 +1,27 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+# Title:         LANTurtle OpenWRT Extroot configuration
+# Description:   Simplified SD card storage
+# Author:        jrwimmer
+# Props:         ImNatho, mike111b, madbuda
+# Version:       1.0
+# Category:      General
+# Target:        N/A
+# Attackmodes:   N/A
+
+VERSION="1.0"
+DESCRIPTION="Simplified SD card storage"
+CONF=/tmp/extroot.form
+
+# All "dialog" functionality is related to the Turtle shell
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ITEM_HELP=4}
+: ${DIALOG_ESC=255}
+
+function configure {
+}
+
+function start {
+}
