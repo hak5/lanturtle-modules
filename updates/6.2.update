@@ -7,7 +7,7 @@ echo -e "All local LAN Turtle data will be erased.\n\n"
 echo -e "Press CTRL+C to CANCEL\n\n"
 sleep 15
 echo -e "Downloading Upgrade file, please wait.\n\n"
-wget -q -O /tmp/upgrade.bin https://downloads.hak5.org/api/devices/lanturtle/firmwares/6.2
+wget -q -O /tmp/upgrade.bin https://downloads.hak5.org/api/devices/lanturtle/firmwares/6.2-stable
 echo -e "Upgrade file downloaded. Verifying file integrity.\n\n"
 [[ "$(sha256sum /tmp/upgrade.bin)" == "463771173c17b8aa3e6baac397d8d9c893d896b8f009b471dea0d66792b5afd1" ]] && {
         echo -e "DO NOT UNPLUG OR POWER DOWN THE LAN TURTLE\n\n"
