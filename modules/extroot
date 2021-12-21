@@ -80,6 +80,8 @@ function check_network {
         echo "\nLAN Turtle could not connect to $opkg_baseurl\nVerify the device's internet connection and try again (wget error $wget_returncode)" > $1
         return 1
     fi
+
+    sleep 3
 }
 
 function install_dependencies {
@@ -190,7 +192,7 @@ function perform_step {
     echo 0 > "$active_tmpfile"
 
     # Perform the requested step
-    eval "$1" | dialog --progressbox "$2" 14 72
+    eval "$1" "$active_tmpfile" | dialog --progressbox "$2" 14 72
 
     # Retrieve the last error written to the tmpfile
     last_return_code=$(cat "$active_tmpfile")
