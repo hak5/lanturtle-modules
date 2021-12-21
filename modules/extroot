@@ -29,12 +29,12 @@ function configure {
 
     return=$?
     case $return in
-      $DIALOG_OK)
+      "$DIALOG_OK")
         perform_migration;;
-      $DIALOG_CANCEL)
+      "$DIALOG_CANCEL")
         dialog --title "Extroot" --msgbox "Operation cancelled" 14 72
         exit 0;;
-      $DIALOG_ESC)
+      "$DIALOG_ESC")
         dialog --title "Extroot" --msgbox "Operation cancelled" 14 72
         exit 0;;
     esac
@@ -51,12 +51,12 @@ function check_space {
         
         return=$?
         case $return in
-          $DIALOG_OK)
+          "$DIALOG_OK")
             return 0;;
-          $DIALOG_CANCEL)
+          "$DIALOG_CANCEL")
             dialog --title "Extroot" --msgbox "Operation cancelled" 14 72
             exit 0;;
-          $DIALOG_ESC)
+          "$DIALOG_ESC")
             dialog --title "Extroot" --msgbox "Operation cancelled" 14 72
             exit 0;;
         esac
@@ -120,9 +120,9 @@ function format_sdcard {
     block umount &> /dev/null
 
     echo "Partitioning SD card"
-    echo -e "o\nn\np\n2\n\n+1024M\nn\np\n1\n\np\n\nw\n" | fdisk $sdcard_device 2>/dev/null
-    mkfs.ext4 -F ${sdcard_device}1
-    mkswap ${sdcard_device}2
+    echo -e "o\nn\np\n2\n\n+1024M\nn\np\n1\n\np\n\nw\n" | fdisk "$sdcard_device" 2>/dev/null
+    mkfs.ext4 -F "${sdcard_device}1"
+    mkswap "${sdcard_device}2"
 
     echo "Restarting the storage bus"
     echo "1-0:1.0" > /sys/bus/usb/drivers/hub/unbind 2>/dev/null
@@ -142,7 +142,7 @@ function make_extroot {
     sdcard_device=$(ls /dev/sd* 2> /dev/null | head -n1)1
     echo "New overlay partition identified as: $sdcard_device"
 
-    eval $(block info ${sdcard_device} | grep -o -e "UUID=\S*")
+    eval $(block info "${sdcard_device}" | grep -o -e "UUID=\S*")
     echo "New overlay partition has a UUID of: $UUID"
 
     echo "Recreating overlay fstab entry"
@@ -166,7 +166,7 @@ function migrate_overlay {
     mount --bind /overlay /tmp/cproot
 
     echo "Mounting new overlay parition at: /mnt"
-    mount ${sdcard_device} /mnt
+    mount "${sdcard_device}" /mnt
 
     echo "Copying data; please wait..."
     tar -C /tmp/cproot -cvf - . 2>/dev/null | tar -C /mnt -xf -	2>/dev/null
@@ -187,15 +187,15 @@ function perform_step {
     # Create a tmpfile in which we can store error data
     active_tmpfile=$(mktemp)
     # Default error data to 0
-    echo 0 > $active_tmpfile
+    echo 0 > "$active_tmpfile"
 
     # Perform the requested step
-    eval $1 | dialog --progressbox "$2" 14 72
+    eval "$1" | dialog --progressbox "$2" 14 72
 
     # Retrieve the last error written to the tmpfile
-    last_return_code=$(cat $active_tmpfile)
+    last_return_code=$(cat "$active_tmpfile")
     # Delete the tmpfile
-    rm $active_tmpfile
+    rm "$active_tmpfile"
 
     # Determine if an error occurred
     if [[ "$last_return_code" != 0 ]]; then
