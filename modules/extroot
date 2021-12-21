@@ -23,6 +23,19 @@ CONF=/tmp/extroot.form
 : ${DIALOG_ESC=255}
 
 function configure {
+    /usr/bin/dialog --title "Extroot: Info" --msgbox "::: NOTICE :::\n\nThis module is intended for use on freshly-imaged devices. Any customizations already made are not guaranteed to persist through extroot configuration." 14 72
+
+    /usr/bin/dialog --title "Extroot: WARNING" --defaultno --yesno "::: WARNING :::\n\n\nThis Operation WILL ERASE THE ATTACHED SD CARD \n\nAre you sure you wish to continue?" 14 72
+
+    return=$?
+    case $return in
+      $DIALOG_OK)
+        perform_migration;;
+      $DIALOG_CANCEL)
+        /usr/bin/dialog --title "Extroot" --msgbox "Operation cancelled" 14 72;;
+      $DIALOG_ESC)
+        /usr/bin/dialog --title "Extroot" --msgbox "Operation cancelled" 14 72;;
+    esac
 }
 
 function check_network {
@@ -145,4 +158,5 @@ function perform_migration {
 }
 
 function start {
+    echo "This module is used via the 'Configure' option"
 }
