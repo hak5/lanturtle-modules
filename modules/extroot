@@ -23,18 +23,18 @@ CONF=/tmp/extroot.form
 : ${DIALOG_ESC=255}
 
 function configure {
-    /usr/bin/dialog --title "Extroot: Info" --msgbox "::: NOTICE :::\n\nThis module is intended for use on freshly-imaged devices. Any customizations already made are not guaranteed to persist through extroot configuration." 14 72
+    dialog --title "Extroot: Info" --msgbox "::: NOTICE :::\n\nThis module is intended for use on freshly-imaged devices. Any customizations already made are not guaranteed to persist through extroot configuration." 14 72
 
-    /usr/bin/dialog --title "Extroot: WARNING" --defaultno --yesno "::: WARNING :::\n\n\nThis Operation WILL ERASE THE ATTACHED SD CARD \n\nAre you sure you wish to continue?" 14 72
+    dialog --title "Extroot: WARNING" --defaultno --yesno "::: WARNING :::\n\n\nThis Operation WILL ERASE THE ATTACHED SD CARD \n\nAre you sure you wish to continue?" 14 72
 
     return=$?
     case $return in
       $DIALOG_OK)
         perform_migration;;
       $DIALOG_CANCEL)
-        /usr/bin/dialog --title "Extroot" --msgbox "Operation cancelled" 14 72;;
+        dialog --title "Extroot" --msgbox "Operation cancelled" 14 72;;
       $DIALOG_ESC)
-        /usr/bin/dialog --title "Extroot" --msgbox "Operation cancelled" 14 72;;
+        dialog --title "Extroot" --msgbox "Operation cancelled" 14 72;;
     esac
 }
 
@@ -59,10 +59,10 @@ function check_network {
 
 function install_dependencies {
     echo "Updating opkg"
-    /bin/opkg update
+    opkg update
 
     echo "Checking/installing dependencies"
-    /bin/opkg install $REQUIRED_PACKAGES
+    opkg install $REQUIRED_PACKAGES
 
     sleep 3
 }
@@ -156,7 +156,7 @@ function migrate_overlay {
 }
 
 function finalize {
-    /usr/bin/dialog --title "Extroot: Info" --msgbox "::: NOTICE :::\n\nOperation complete. To finalize changes, the system will now reboot." 14 72
+    dialog --title "Extroot: Info" --msgbox "::: NOTICE :::\n\nOperation complete. To finalize changes, the system will now reboot." 14 72
     reboot
 }
 
@@ -167,7 +167,7 @@ function perform_step {
     echo 0 > $active_tmpfile
 
     # Perform the requested step
-    eval $1 | /usr/bin/dialog --progressbox "$2" 14 72
+    eval $1 | dialog --progressbox "$2" 14 72
 
     # Retrieve the last error written to the tmpfile
     last_return_code=$(cat $active_tmpfile)
@@ -177,7 +177,7 @@ function perform_step {
     # Determine if an error occurred
     if [[ "$last_return_code" != 0 ]]; then
         # Notify the user of the problem
-        /usr/bin/dialog --title "Extroot: Error" --msgbox "$last_return_code" 9 72
+        dialog --title "Extroot: Error" --msgbox "$last_return_code" 9 72
         exit 1
     fi
 }
