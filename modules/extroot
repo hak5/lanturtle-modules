@@ -32,10 +32,35 @@ function configure {
       $DIALOG_OK)
         perform_migration;;
       $DIALOG_CANCEL)
-        dialog --title "Extroot" --msgbox "Operation cancelled" 14 72;;
+        dialog --title "Extroot" --msgbox "Operation cancelled" 14 72
+        exit 0;;
       $DIALOG_ESC)
-        dialog --title "Extroot" --msgbox "Operation cancelled" 14 72;;
+        dialog --title "Extroot" --msgbox "Operation cancelled" 14 72
+        exit 0;;
     esac
+}
+
+function check_space {
+    # Get block size for the root partition
+    rootfs_blocksize=$(df -P / | awk '{print $2}' | tail -n+2)
+    rootfs_humansize=$(df -h / | awk '{print $2}' | tail -n+2)
+
+    # Check if the root partition is larger than 256 MB
+    if (( $rootfs_blocksize > 256000 )); then
+        dialog --title "Extroot: WARNING" --defaultno --yesno "::: WARNING :::\n\n\nThe root partition appears to be larger than 256MB in size (Seen: $rootfs_humansize)\n\nThis may indicate that the overlay configuration process has already been performed on this installation.\n\nAre you sure you wish to continue?" 14 72
+        
+        return=$?
+        case $return in
+          $DIALOG_OK)
+            return 0;;
+          $DIALOG_CANCEL)
+            dialog --title "Extroot" --msgbox "Operation cancelled" 14 72
+            exit 0;;
+          $DIALOG_ESC)
+            dialog --title "Extroot" --msgbox "Operation cancelled" 14 72
+            exit 0;;
+        esac
+    fi
 }
 
 function check_network {
@@ -68,8 +93,6 @@ function install_dependencies {
 }
 
 function remount_rootfsdata {
-    #TODO: Add sanity check for the overlay having already been migrated
-
     # Identify flash memory device containing current overlay
     rootfsdata_dev="$(sed -n -e "/\s\/overlay\s.*$/s///p" /etc/mtab)"
 
@@ -183,6 +206,7 @@ function perform_step {
 }
 
 function perform_migration {
+    check_space
 
     perform_step "check_network" "Checking network connectivity"
 
