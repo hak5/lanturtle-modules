@@ -4,6 +4,7 @@ cron Schedule tasks
 ddnsc Dynamic Domain Name Service
 dns-spoof Forges replies to arbitrary DNS address
 dnsmasq-spoof DNSSpoof using DNSMasq
+extroot Simplified SD card storage
 follow-file Follow log printing data as file grows
 iodine Creates a DNS Tunnel using iodine 
 keymanager SSH Key Manager

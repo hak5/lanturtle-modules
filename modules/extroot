@@ -1,0 +1,230 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+# Title:         LANTurtle OpenWRT Extroot configuration
+# Description:   Simplified SD card storage
+# Author:        jrwimmer
+# Props:         The OpenWrt community
+# Version:       1.0
+# Category:      General
+# Target:        N/A
+# Attackmodes:   N/A
+
+# Constants
+VERSION="1.0"
+DESCRIPTION="Simplified SD card storage"
+REQUIRED_PACKAGES="block-mount kmod-fs-ext4 e2fsprogs fdisk"
+CONF=/tmp/extroot.form
+
+# All "dialog" functionality is related to the Turtle shell
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ITEM_HELP=4}
+: ${DIALOG_ESC=255}
+
+function configure {
+    dialog --title "Extroot: Info" --msgbox "::: NOTICE :::\n\nThis module is intended for use on freshly-imaged devices. Any customizations already made are not guaranteed to persist through extroot configuration." 14 72
+
+    dialog --title "Extroot: WARNING" --defaultno --yesno "::: WARNING :::\n\n\nThis Operation WILL ERASE THE ATTACHED SD CARD \n\nAre you sure you wish to continue?" 14 72
+
+    return=$?
+    case $return in
+      "$DIALOG_OK")
+        perform_migration;;
+      "$DIALOG_CANCEL")
+        dialog --title "Extroot" --msgbox "Operation cancelled" 14 72
+        exit 0;;
+      "$DIALOG_ESC")
+        dialog --title "Extroot" --msgbox "Operation cancelled" 14 72
+        exit 0;;
+    esac
+}
+
+function check_space {
+    # Get block size for the root partition
+    rootfs_blocksize=$(df -P / | awk '{print $2}' | tail -n+2)
+    rootfs_humansize=$(df -h / | awk '{print $2}' | tail -n+2)
+
+    # Check if the root partition is larger than 256 MB
+    if (( $rootfs_blocksize > 256000 )); then
+        dialog --title "Extroot: WARNING" --defaultno --yesno "::: WARNING :::\n\n\nThe root partition appears to be larger than 256MB in size (Seen: $rootfs_humansize)\n\nThis may indicate that the overlay configuration process has already been performed on this installation.\n\nAre you sure you wish to continue?" 14 72
+        
+        return=$?
+        case $return in
+          "$DIALOG_OK")
+            return 0;;
+          "$DIALOG_CANCEL")
+            dialog --title "Extroot" --msgbox "Operation cancelled" 14 72
+            exit 0;;
+          "$DIALOG_ESC")
+            dialog --title "Extroot" --msgbox "Operation cancelled" 14 72
+            exit 0;;
+        esac
+    fi
+}
+
+function check_network {
+    # Check for Internet connection by attempting to contact an opkg repository server
+
+    # First, extract a server URL from distfeeds.conf
+    opkg_baseurl=$(sed -E -n "s/^[^#]*(http:\/\/[^\/]*)\/.*/\1/p;q" /etc/opkg/distfeeds.conf) &> /dev/null
+    if [[ $? -ne 0 ]]; then
+        echo "\nCould not extract an opkg repo from distfeeds.conf\n\nIf this is unexpected, you may need to upgrade or restore the firmware." > $1
+        return 1
+    fi
+
+    # ...then, use wget to determine if the server can be reached
+    wget -q --tries 3 --spider "$opkg_baseurl" &> /dev/null
+    wget_returncode=$?
+    if [[ $wget_returncode -ne 0 ]]; then
+        echo "\nLAN Turtle could not connect to $opkg_baseurl\nVerify the device's internet connection and try again (wget error $wget_returncode)" > $1
+        return 1
+    fi
+
+    sleep 3
+}
+
+function install_dependencies {
+    echo "Updating opkg"
+    opkg update
+
+    echo "Checking/installing dependencies"
+    opkg install $REQUIRED_PACKAGES
+
+    sleep 3
+}
+
+function remount_rootfsdata {
+    # Identify flash memory device containing current overlay
+    rootfsdata_dev="$(sed -n -e "/\s\/overlay\s.*$/s///p" /etc/mtab)"
+
+    # Create remount entry
+    uci -q delete fstab.rwm
+    uci set fstab.rwm="mount"
+    uci set fstab.rwm.device="${rootfsdata_dev}"
+    uci set fstab.rwm.target="/rwm"
+    uci commit fstab
+
+    sleep 3
+}
+
+function format_sdcard {
+    echo "Checking SD card presence"
+    [[ "$(ls /dev/sd* 2> /dev/null | wc -l)" == "0" ]] && {
+        echo "\nError: No SD card is inserted or the card is not supported\n\nAdditional Details:\nCould not find a device with prefix 'sd'" > $1
+        return 1
+    }
+
+    sdcard_device=$(ls /dev/sd* 2> /dev/null | head -n1)
+    echo "New overlay device identified as: $sdcard_device"
+
+    echo "Unmounting any active external storage"
+    block umount &> /dev/null
+
+    echo "Partitioning SD card"
+    echo -e "o\nn\np\n2\n\n+1024M\nn\np\n1\n\np\n\nw\n" | fdisk "$sdcard_device" 2>/dev/null
+    mkfs.ext4 -F "${sdcard_device}1"
+    mkswap "${sdcard_device}2"
+
+    echo "Restarting the storage bus"
+    echo "1-0:1.0" > /sys/bus/usb/drivers/hub/unbind 2>/dev/null
+    echo "1-0:1.0" > /sys/bus/usb/drivers/hub/bind 2>/dev/null
+    sleep 3
+
+    echo "Commit/activate swap and remove existing SD card mounts"
+    block detect > /etc/config/fstab
+    uci -q delete fstab.@mount[0]
+    uci commit fstab
+    block mount &> /dev/null
+
+    sleep 3
+}
+
+function make_extroot {
+    sdcard_device=$(ls /dev/sd* 2> /dev/null | head -n1)1
+    echo "New overlay partition identified as: $sdcard_device"
+
+    eval $(block info "${sdcard_device}" | grep -o -e "UUID=\S*")
+    echo "New overlay partition has a UUID of: $UUID"
+
+    echo "Recreating overlay fstab entry"
+    uci -q delete fstab.overlay
+    uci set fstab.overlay="mount"
+    uci set fstab.overlay.uuid="${UUID}"
+    uci set fstab.overlay.target="/overlay"
+    uci commit fstab
+
+    sleep 3
+}
+
+function migrate_overlay {
+    sdcard_device=$(ls /dev/sd* 2> /dev/null | head -n1)1
+    echo "New overlay partition identified as: $sdcard_device"
+
+    echo "Creating temporary mount point directory at: /tmp/cproot"
+    mkdir -p /tmp/cproot
+
+    echo "Binding active overlay to: /tmp/cproot"
+    mount --bind /overlay /tmp/cproot
+
+    echo "Mounting new overlay parition at: /mnt"
+    mount "${sdcard_device}" /mnt
+
+    echo "Copying data; please wait..."
+    tar -C /tmp/cproot -cvf - . 2>/dev/null | tar -C /mnt -xf -	2>/dev/null
+    echo "Copy process complete"
+
+    echo "Unmounting new overlay and removing bind"
+    umount /tmp/cproot /mnt
+
+    sleep 3
+}
+
+function finalize {
+    dialog --title "Extroot: Info" --msgbox "::: NOTICE :::\n\nOperation complete. To finalize changes, the system will now reboot." 14 72
+    reboot
+}
+
+function perform_step {
+    # Create a tmpfile in which we can store error data
+    active_tmpfile=$(mktemp)
+    # Default error data to 0
+    echo 0 > "$active_tmpfile"
+
+    # Perform the requested step
+    eval "$1" "$active_tmpfile" | dialog --progressbox "$2" 14 72
+
+    # Retrieve the last error written to the tmpfile
+    last_return_code=$(cat "$active_tmpfile")
+    # Delete the tmpfile
+    rm "$active_tmpfile"
+
+    # Determine if an error occurred
+    if [[ "$last_return_code" != 0 ]]; then
+        # Notify the user of the problem
+        dialog --title "Extroot: Error" --msgbox "$last_return_code" 9 72
+        exit 1
+    fi
+}
+
+function perform_migration {
+    check_space
+
+    perform_step "check_network" "Checking network connectivity"
+
+    perform_step "install_dependencies" "Installing requried dependencies"
+
+    perform_step "remount_rootfsdata" "Creating backup mount for current overlay"
+
+    perform_step "format_sdcard" "Formatting SD card"
+
+    perform_step "make_extroot" "Configuring new overlay"
+
+    perform_step "migrate_overlay" "Migrating overlay data"
+
+    finalize
+}
+
+function start {
+    echo "This module is used via the 'Configure' option"
+}
