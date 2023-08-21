@@ -13,7 +13,7 @@ CONF=/tmp/autossh.form
 
 function start {
   autossh_host=$(uci show autossh.@autossh[0].ssh | awk '{print $7}' | sed 's/@/ /g' | awk '{print $2}')
-  touch /root/.ssh/known_hosts
+  mkdir -p /root.ssh && touch /root/.ssh/known_hosts
   if grep $autossh_host /root/.ssh/known_hosts; then
     /etc/init.d/autossh start
   else
