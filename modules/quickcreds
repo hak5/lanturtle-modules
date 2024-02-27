@@ -15,7 +15,7 @@ LOOTDIR="/root/loot/quickcreds/"
 RESPLOG=$LOOTDIR"responder.log"
 RESPROOT="/sd"
 RESPTEMPDL="/tmp/ResponderDownload/"
-RESPURL="https://github.com/lgandx/Responder/archive/master.zip"
+RESPURL="https://github.com/lgandx/Responder/archive/refs/tags/v3.1.4.0.zip"
 RESPLOGDIR=$RESPROOT/"Responder/logs"
 SLEEPTIMER="1"
 
@@ -85,10 +85,10 @@ function configure {
         /usr/bin/wget --progress=dot "$RESPURL" -P "$RESPTEMPDL" 2>&1 | /usr/bin/dialog --progressbox "Download dependency responder" 14 72
         # Unpack the GitHub download
         /usr/bin/unzip "$RESPTEMPDL"master.zip -d "$RESPTEMPDL" 2>&1 | /usr/bin/dialog --progressbox "Unpacking dependency responder" 14 72
-        /bin/rm "$RESPTEMPDL"Responder-master/tools/MultiRelay/bin/*.exe
-        /bin/mv "$RESPTEMPDL"Responder-master "$RESPTEMPDL"Responder
+        /bin/rm "$RESPTEMPDL"Responder-3.1.4.0/tools/MultiRelay/bin/*.exe
+        /bin/mv "$RESPTEMPDL"Responder-3.1.4.0 "$RESPTEMPDL"Responder
         /bin/mv "$RESPTEMPDL"Responder "$RESPROOT"
-        /bin/rm -rf "$RESPTEMPDL"master.zip*
+        /bin/rm -rf "$RESPTEMPDL"v3.1.4.0.zip*
     fi
 
     # Setup loot directory and complete setup
