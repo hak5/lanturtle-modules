@@ -19,6 +19,7 @@ responder Responder - LLMNR, NBT-NS and MDNS poisoner
 script2email Email script output via SMTP
 script2http Post script output via HTTP
 sshfs Mounts remote File Systems over SSH
+stunnel pass a unsecure protocol through a SSL connection
 tortle TOR Turtle Gateway TOR hidden SHELL Service
 upnp-portfwd uPnP Port Forwarding
 uptime System Uptime
