@@ -1,0 +1,91 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+VERSION="0.1"
+DESCRIPTION="stunnel - pass a unsecure protocol through a SSL connection"
+AUTHOR="p4p1"
+CONF=/tmp/stunnel.form
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ITEM_HELP=4}
+: ${DIALOG_ESC=255}
+
+function start {
+	if [ ! -e "/etc/config/stunnel" ]; then
+		opkg update
+		opkg install stunnel
+	fi
+
+	/etc/init.d/stunnel start
+	/etc/init.d/stunnel enable
+}
+
+function stop {
+	/etc/init.d/stunnel stop
+	/etc/init.d/stunnel disable
+}
+
+
+function status {
+	if pgrep /usr/bin/stunnel > /dev/null; then echo "1"; else echo "0"; fi
+}
+
+
+function configure {
+	if [ -s /etc/stunnel/stunnel ]; then
+		stunelaccept_host=$(uci show stunnel.dummy.accept_host | awk '{print $7}' | sed "s/'//g")
+		stunnelaccept_port=$(uci show stunnel.dummy.accept_port | awk '{print $9}' | sed "s/'//g")
+		stunnel_connect=$(uci show stunnel.dummy.connect | awk '{print $6}' | sed 's/:/ /g' | awk '{print $1}')
+	else
+		touch /etc/config/stunnel
+	fi
+
+	dialog --ok-label "Submit" \
+	--help-button \
+	--title "Stunnel Configuration" \
+	--form "Stunnel (Setup a SSL tunnel for other services)\n\n\
+Accept Host:   The host needed to forward through the SSL tunnel.\n\
+Port: The port needed to forward through the SSL tunnel.\n\
+Connection String:  Connection string to the server with the SSL tunnel.\n \n" 16 60 4\
+	"Accept Host:"    1 1 "$stunelaccept_host" 1 14 48 0 \
+	"Accept Port:"         2 1 "$stunnelaccept_port" 2 14 48 0 \
+	"Con String:"  3 1 "$stunnel_connect" 3 14 48 0 \
+	2>$CONF
+
+	return=$?
+
+	case $return in
+		$DIALOG_OK)
+			cat $CONF | { 
+			read -r stunelaccept_host
+			read -r stunnelaccept_port
+			read -r stunnel_connect
+			touch /etc/config/stunnel
+			uci set stunnel.dummy.accept_host=$stunelaccept_host
+			uci set stunnel.dummy.accept_port=$stunnelaccept_port
+			uci set stunnel.dummy.connect=$stunnel_connect
+			uci commit stunnel
+			rm $CONF
+			};;
+		$DIALOG_CANCEL)
+			rm $CONF
+			clear
+			exit;;
+		$DIALOG_HELP)
+			dialog --title "Help" \
+				--msgbox "\
+The stunnel service allowing you to used unencrypted protocols through a encrypted connection.\n \n\
+Accept Host - The local host stunnel is accepting connections on.\n \n\
+Accept Port - The local port stunnel is accepting connections on.\n \n
+Connect String - The string representing the remote stunnel server and it's port to connect back to.\n \n
+Example: the accept host would be 127.0.0.1 and port 1194 for openvpn and the connect string 'remote.ip:remote_port'\n \n
+A full tutorial on it's usage is available here https://leosmith.wtf/blog/hiding-openvpn-traffic.html\
+\
+" 20 60
+			configure
+			;;
+		$DIALOG_ESC)
+			clear;;
+	esac
+}
