@@ -1,0 +1,406 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+VERSION="1.0"
+DESCRIPTION="NullSec NetWatch - Continuous network monitoring with alerting and change detection"
+CONF=/tmp/netwatch.form
+OUTPUT=/tmp/netwatch.out
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ITEM_HELP=4}
+: ${DIALOG_ESC=255}
+
+NETWATCH_DIR="/tmp/netwatch"
+NETWATCH_LOG="/tmp/netwatch/netwatch.log"
+NETWATCH_BASELINE="/tmp/netwatch/baseline.txt"
+NETWATCH_ALERTS="/tmp/netwatch/alerts.log"
+NETWATCH_PID="/tmp/netwatch/netwatch.pid"
+
+function start {
+    if [ -s /etc/config/netwatch ]; then
+        local target=$(uci get netwatch.target 2>/dev/null)
+        local interval=$(uci get netwatch.interval 2>/dev/null || echo "60")
+        local log_dir=$(uci get netwatch.log_dir 2>/dev/null || echo "/tmp/netwatch")
+        local webhook=$(uci get netwatch.webhook 2>/dev/null)
+        local mode=$(uci get netwatch.mode 2>/dev/null || echo "1")
+
+        if [ -z "$target" ]; then
+            echo "NetWatch: Missing target configuration"
+            exit 1
+        fi
+
+        mkdir -p "$log_dir"
+
+        # Kill any existing instance
+        if [ -f "$NETWATCH_PID" ]; then
+            kill $(cat "$NETWATCH_PID") 2>/dev/null
+        fi
+
+        # Start the monitoring daemon
+        (
+            echo $$ > "$NETWATCH_PID"
+            echo "[$(date)] NetWatch started - Target: $target, Interval: ${interval}s, Mode: $mode" >> "$log_dir/netwatch.log"
+
+            # Initial baseline scan
+            echo "[$(date)] Creating baseline scan..." >> "$log_dir/netwatch.log"
+            case $mode in
+                1) # Host Discovery
+                    ping_sweep "$target" > "$log_dir/baseline.txt" 2>/dev/null
+                    ;;
+                2) # Port Monitor
+                    port_scan "$target" > "$log_dir/baseline.txt" 2>/dev/null
+                    ;;
+                3) # ARP Watch
+                    arp_monitor > "$log_dir/baseline.txt" 2>/dev/null
+                    ;;
+                4) # Full Recon
+                    full_recon "$target" > "$log_dir/baseline.txt" 2>/dev/null
+                    ;;
+            esac
+
+            SCAN_COUNT=0
+            while true; do
+                sleep "$interval"
+                SCAN_COUNT=$((SCAN_COUNT + 1))
+                local DATE=$(date +"%Y-%m-%d_%H-%M-%S")
+
+                # Current scan
+                case $mode in
+                    1) ping_sweep "$target" > "$log_dir/current.txt" 2>/dev/null ;;
+                    2) port_scan "$target" > "$log_dir/current.txt" 2>/dev/null ;;
+                    3) arp_monitor > "$log_dir/current.txt" 2>/dev/null ;;
+                    4) full_recon "$target" > "$log_dir/current.txt" 2>/dev/null ;;
+                esac
+
+                # Compare with baseline
+                local changes=$(diff "$log_dir/baseline.txt" "$log_dir/current.txt" 2>/dev/null)
+                if [ -n "$changes" ]; then
+                    echo "[${DATE}] ALERT: Network changes detected (scan #${SCAN_COUNT}):" >> "$log_dir/alerts.log"
+                    echo "$changes" >> "$log_dir/alerts.log"
+                    echo "---" >> "$log_dir/alerts.log"
+
+                    # New hosts (lines starting with >)
+                    local new_hosts=$(echo "$changes" | grep "^>" | sed 's/^> //')
+                    local gone_hosts=$(echo "$changes" | grep "^<" | sed 's/^< //')
+
+                    if [ -n "$new_hosts" ]; then
+                        echo "[${DATE}] NEW HOSTS:" >> "$log_dir/alerts.log"
+                        echo "$new_hosts" >> "$log_dir/alerts.log"
+                    fi
+
+                    if [ -n "$gone_hosts" ]; then
+                        echo "[${DATE}] HOSTS GONE:" >> "$log_dir/alerts.log"
+                        echo "$gone_hosts" >> "$log_dir/alerts.log"
+                    fi
+
+                    # Webhook notification
+                    if [ -n "$webhook" ]; then
+                        local alert_msg="NetWatch Alert [${DATE}] - Network changes detected on $target"
+                        if [ -n "$new_hosts" ]; then
+                            alert_msg="$alert_msg | New: $new_hosts"
+                        fi
+                        curl -s -X POST "$webhook" \
+                            -H "Content-Type: application/json" \
+                            -d "{\"content\":\"$alert_msg\"}" 2>/dev/null
+                    fi
+
+                    # Update baseline
+                    cp "$log_dir/current.txt" "$log_dir/baseline.txt"
+                else
+                    echo "[${DATE}] Scan #${SCAN_COUNT}: No changes detected" >> "$log_dir/netwatch.log"
+                fi
+
+                # Store periodic snapshots every 10 scans
+                if [ $((SCAN_COUNT % 10)) -eq 0 ]; then
+                    cp "$log_dir/current.txt" "$log_dir/snapshot_${DATE}.txt"
+                fi
+            done
+        ) &
+
+        echo "NetWatch started with PID $!"
+    else
+        echo "NetWatch not configured"
+    fi
+}
+
+function ping_sweep {
+    local target=$1
+    local base_ip=$(echo "$target" | cut -d'.' -f1-3)
+    local range_start=$(echo "$target" | cut -d'-' -f1 | cut -d'.' -f4)
+    local range_end=$(echo "$target" | cut -d'-' -f2)
+
+    if [ -z "$range_end" ]; then
+        # Single IP or CIDR - try to determine range
+        range_start=1
+        range_end=254
+    fi
+
+    for i in $(seq $range_start $range_end); do
+        local ip="${base_ip}.${i}"
+        if ping -c 1 -W 1 "$ip" > /dev/null 2>&1; then
+            local mac=$(arp -n "$ip" 2>/dev/null | grep -v incomplete | awk '{print $4}' | head -1)
+            echo "UP ${ip} MAC:${mac:-unknown}"
+        fi
+    done | sort
+}
+
+function port_scan {
+    local target=$1
+    local common_ports="21 22 23 25 53 80 110 111 135 139 143 443 445 993 995 1433 1723 3306 3389 5432 5900 8080 8443 8888 9090"
+
+    for port in $common_ports; do
+        local result=$(echo "" | nc -w 1 "$target" "$port" 2>&1)
+        if [ $? -eq 0 ]; then
+            echo "OPEN ${target}:${port}"
+        fi
+    done | sort
+}
+
+function arp_monitor {
+    # Dump current ARP table with timestamps
+    arp -n 2>/dev/null | grep -v "incomplete" | grep -v "Address" | \
+        awk '{print $1, $3, $5}' | sort
+    # Also check for ARP anomalies (multiple IPs per MAC = potential spoofing)
+    arp -n 2>/dev/null | grep -v "incomplete" | grep -v "Address" | \
+        awk '{print $3}' | sort | uniq -d | while read dup_mac; do
+            echo "WARNING: Duplicate MAC $dup_mac (potential ARP spoofing)"
+        done
+}
+
+function full_recon {
+    local target=$1
+    echo "=== HOST DISCOVERY ==="
+    ping_sweep "$target"
+    echo ""
+    echo "=== ARP TABLE ==="
+    arp_monitor
+    echo ""
+    echo "=== ROUTING TABLE ==="
+    route -n 2>/dev/null | grep -v "Kernel" | grep -v "Destination"
+    echo ""
+    echo "=== ACTIVE CONNECTIONS ==="
+    netstat -tuln 2>/dev/null | grep -v "Active" | grep -v "Proto" | head -20
+    echo ""
+    echo "=== DNS SERVERS ==="
+    cat /etc/resolv.conf 2>/dev/null | grep nameserver
+    echo ""
+    echo "=== GATEWAY ==="
+    ip route show default 2>/dev/null
+}
+
+function stop {
+    if [ -f "$NETWATCH_PID" ]; then
+        kill $(cat "$NETWATCH_PID") 2>/dev/null
+        rm -f "$NETWATCH_PID"
+        echo "[$(date)] NetWatch stopped" >> "$NETWATCH_LOG"
+    fi
+    # Kill any remaining child processes
+    pkill -f "netwatch" 2>/dev/null
+}
+
+function status {
+    if [ -f "$NETWATCH_PID" ] && kill -0 $(cat "$NETWATCH_PID") 2>/dev/null; then
+        echo "1"
+    else
+        echo "0"
+    fi
+}
+
+function set_target {
+    local current_target=$(uci get netwatch.target 2>/dev/null)
+
+    dialog --ok-label "Submit" \
+        --extra-button \
+        --extra-label "Show IP" \
+        --title "Specify Target Network" \
+        --form "\n\
+Specify network range to monitor.\n\
+Format: 192.168.1.1-254 or single IP: 192.168.1.1\n\n" 11 60 1\
+        "Target:" 1 1 "$current_target" 1 12 200 0 \
+    2>$CONF
+    return=$?
+    case $return in
+        $DIALOG_OK)
+            cat $CONF | {
+                read -r target
+                touch /etc/config/netwatch
+                uci set netwatch.target="$target"
+                uci commit netwatch
+                rm $CONF
+                configure
+            };;
+        $DIALOG_CANCEL)
+            rm $CONF
+            clear
+            configure;;
+        $DIALOG_EXTRA)
+            ifconfig > /tmp/ip.out
+            route >> /tmp/ip.out
+            dialog --textbox /tmp/ip.out 18 72
+            rm /tmp/ip.out
+            set_target;;
+        $DIALOG_ESC)
+            clear;;
+    esac
+}
+
+function set_interval {
+    local current_interval=$(uci get netwatch.interval 2>/dev/null || echo "60")
+
+    dialog --ok-label "Submit" \
+        --title "Scan Interval" \
+        --form "\n\
+Set the interval between scans (in seconds).\n\
+Recommended: 30-300 seconds.\n\n" 11 60 1\
+        "Interval (sec):" 1 1 "$current_interval" 1 18 10 0 \
+    2>$CONF
+    return=$?
+    case $return in
+        $DIALOG_OK)
+            cat $CONF | {
+                read -r interval
+                touch /etc/config/netwatch
+                uci set netwatch.interval="$interval"
+                uci commit netwatch
+                rm $CONF
+                configure
+            };;
+        $DIALOG_CANCEL)
+            rm $CONF
+            configure;;
+        $DIALOG_ESC)
+            configure;;
+    esac
+}
+
+function set_mode {
+    local current_mode=$(uci get netwatch.mode 2>/dev/null || echo "1")
+
+    dialog --ok-label "Submit" \
+        --title "Monitoring Mode" \
+        --radiolist "\nSelect monitoring mode\n \n" 15 60 4\
+        1 "Host Discovery (ping sweep)" $([ "$current_mode" = "1" ] && echo "on" || echo "off")\
+        2 "Port Monitor (track open ports)" $([ "$current_mode" = "2" ] && echo "on" || echo "off")\
+        3 "ARP Watch (detect ARP changes/spoofing)" $([ "$current_mode" = "3" ] && echo "on" || echo "off")\
+        4 "Full Recon (comprehensive scan)" $([ "$current_mode" = "4" ] && echo "on" || echo "off")\
+    2>$CONF
+    return=$?
+    case $return in
+        $DIALOG_OK)
+            mode=$(cat $CONF)
+            touch /etc/config/netwatch
+            uci set netwatch.mode="$mode"
+            uci commit netwatch
+            rm $CONF
+            configure;;
+        $DIALOG_CANCEL)
+            configure;;
+        $DIALOG_ESC)
+            configure;;
+    esac
+}
+
+function set_webhook {
+    local current_webhook=$(uci get netwatch.webhook 2>/dev/null)
+
+    dialog --ok-label "Submit" \
+        --title "Alert Webhook (Optional)" \
+        --form "\n\
+Set a Discord/Slack webhook URL for real-time alerts.\n\
+Leave blank to disable webhook notifications.\n\n" 11 60 1\
+        "Webhook URL:" 1 1 "$current_webhook" 1 15 200 0 \
+    2>$CONF
+    return=$?
+    case $return in
+        $DIALOG_OK)
+            cat $CONF | {
+                read -r webhook
+                touch /etc/config/netwatch
+                uci set netwatch.webhook="$webhook"
+                uci commit netwatch
+                rm $CONF
+                configure
+            };;
+        $DIALOG_CANCEL)
+            rm $CONF
+            configure;;
+        $DIALOG_ESC)
+            configure;;
+    esac
+}
+
+function set_log_dir {
+    LOG=$(dialog --title "Select log directory" --stdout --dselect /tmp/netwatch/ 14 60)
+    if [ -d "$LOG" ] || mkdir -p "$LOG" 2>/dev/null; then
+        uci set netwatch.log_dir="$LOG"
+        uci commit netwatch
+    else
+        dialog --title "Error" --clear --msgbox "Could not create directory: $LOG" 8 50
+    fi
+    configure
+}
+
+function view_alerts {
+    local log_dir=$(uci get netwatch.log_dir 2>/dev/null || echo "/tmp/netwatch")
+    if [ -f "$log_dir/alerts.log" ]; then
+        dialog --title "NetWatch Alerts" --clear --textbox "$log_dir/alerts.log" 20 76
+    else
+        dialog --title "NetWatch Alerts" --clear --msgbox "No alerts recorded yet." 8 50
+    fi
+    configure
+}
+
+function view_baseline {
+    local log_dir=$(uci get netwatch.log_dir 2>/dev/null || echo "/tmp/netwatch")
+    if [ -f "$log_dir/baseline.txt" ]; then
+        dialog --title "Current Network Baseline" --clear --textbox "$log_dir/baseline.txt" 20 76
+    else
+        dialog --title "Baseline" --clear --msgbox "No baseline scan yet. Start monitoring first." 8 50
+    fi
+    configure
+}
+
+function view_log {
+    local log_dir=$(uci get netwatch.log_dir 2>/dev/null || echo "/tmp/netwatch")
+    if [ -f "$log_dir/netwatch.log" ]; then
+        dialog --title "NetWatch Log" --clear --tailbox "$log_dir/netwatch.log" 20 76
+    else
+        dialog --title "Log" --clear --msgbox "No log file yet." 8 50
+    fi
+    configure
+}
+
+function configure {
+    if [ ! -s /etc/config/netwatch ]; then
+        touch /etc/config/netwatch
+    fi
+
+    local running="STOPPED"
+    if [ -f "$NETWATCH_PID" ] && kill -0 $(cat "$NETWATCH_PID") 2>/dev/null; then
+        running="RUNNING"
+    fi
+
+    dialog --title "NullSec NetWatch [$running]" --menu "" 20 60 10 \
+        "target"    "Set target network range" \
+        "mode"      "Select monitoring mode" \
+        "interval"  "Set scan interval" \
+        "webhook"   "Configure alert webhook" \
+        "log_dir"   "Set log directory" \
+        "alerts"    "View alerts" \
+        "baseline"  "View current baseline" \
+        "log"       "View activity log" \
+        "back"      "Back" 2> $CONF
+    result=$(cat $CONF && rm $CONF &>/dev/null)
+    case $result in
+        "target") set_target;;
+        "mode") set_mode;;
+        "interval") set_interval;;
+        "webhook") set_webhook;;
+        "log_dir") set_log_dir;;
+        "alerts") view_alerts;;
+        "baseline") view_baseline;;
+        "log") view_log;;
+        "back") exit;;
+    esac
+}
