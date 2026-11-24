@@ -1,0 +1,932 @@
+#!/bin/bash /usr/lib/turtle/turtle_module
+#
+# TurtleTAK Classic Edition
+# Puts this LAN Turtle on the TAK map as a facility sensor and sends network
+# watch alerts (new device, watched device missing / back, Ethernet link,
+# ARP spoofing) as TAK markers and GeoChat.
+# For the original Hak5 LAN Turtle and the LAN Turtle SD.
+#
+# https://github.com/SECT0101/TurtleTAK-Classic   License: GPL-3.0
+#
+# Set it up in Modules > turtletak > Configure, then Start (and Enable to run at boot).
+
+VERSION="1.0.0"
+# shellcheck disable=SC2034  # DESCRIPTION and AUTHOR are read by the Turtle module menu
+DESCRIPTION="TurtleTAK Classic: this Turtle on TAK with network alerts"
+# shellcheck disable=SC2034
+AUTHOR="SECT0101"
+CONF=/tmp/turtletak.form
+
+: ${DIALOG_OK=0}
+: ${DIALOG_CANCEL=1}
+: ${DIALOG_HELP=2}
+: ${DIALOG_EXTRA=3}
+: ${DIALOG_ITEM_HELP=4}
+: ${DIALOG_ESC=255}
+
+# Paths (the TT_* overrides are only for testing off the Turtle)
+TT_PROC=${TT_PROC:-/proc}
+TT_SYS=${TT_SYS:-/sys}
+TT_ETC=${TT_ETC:-/etc}
+RUN=${TT_RUN:-/tmp/turtletak}
+CERTS=$TT_ETC/turtletak/certs
+PIDF=$RUN/turtletak.pid
+UCI_FILE=$TT_ETC/config/turtletak
+TICK=${TT_TICK:-15}
+MIN=${TT_MIN:-60}     # seconds per minute (tests shorten it)
+
+PRODUCT="TurtleTAK Classic"
+TEAM_COLORS="White Yellow Orange Magenta Red Maroon Purple Dark-Blue Blue Cyan Teal Green Dark-Green Brown"
+
+#############################################################################
+# Settings (UCI: /etc/config/turtletak, section "main")
+
+cfg() { # cfg key [default]
+    local v
+    v=$(uci -q get "turtletak.main.$1" 2>/dev/null)
+    if [ -n "$v" ]; then printf '%s' "$v"; else printf '%s' "$2"; fi
+}
+
+cfg_set() { uci -q set "turtletak.main.$1=$2"; }
+
+cfg_list() { uci -q get "turtletak.main.$1" 2>/dev/null | tr ' ' '\n' | grep -v '^$'; }
+
+cfg_init() {
+    [ -s "$UCI_FILE" ] || { mkdir -p "$TT_ETC/config"; touch "$UCI_FILE"; }
+    uci -q get turtletak.main >/dev/null 2>&1 || { uci -q set turtletak.main=turtletak; uci -q commit turtletak; }
+}
+
+cfg_commit() { uci -q commit turtletak; }
+
+configured() { [ -n "$(cfg host)" ] && [ -n "$(cfg lat)" ] && [ -n "$(cfg lon)" ]; }
+
+valid_type() { printf '%s' "$1" | grep -Eq '^a-[fhunpsajkox]-[A-Z](-[A-Za-z0-9]+)*$'; }
+
+cot_type() { # the Turtle's own marker type (Configure > Callsign / place > Marker type)
+    local t
+    t=$(cfg cot_type a-f-G-E-S)
+    valid_type "$t" || t="a-f-G-E-S"
+    printf '%s' "$t"
+}
+
+team() { cfg team Cyan | tr '-' ' '; }   # ATAK team color, sent in __group ("Dark Blue")
+
+type_label() {
+    case "$1" in
+        a-f-G-E-S) echo sensor ;; a-f-G-I) echo facility ;; a-f-G-U-C) echo "team member, $(team)" ;; *) echo "$1" ;;
+    esac
+}
+
+#############################################################################
+# Small helpers (BusyBox and bash only)
+
+now() { date +%s; }
+
+# epoch -> "Y M D h m s" in UTC, without relying on date -d (old BusyBox lacks it)
+ymdhms() {
+    local t=$1 z era doe yoe y doy mp d m
+    local s=$((t % 86400)) days=$((t / 86400))
+    z=$((days + 719468)); era=$((z / 146097)); doe=$((z - era * 146097))
+    yoe=$(((doe - doe / 1460 + doe / 36524 - doe / 146096) / 365))
+    y=$((yoe + era * 400)); doy=$((doe - (365 * yoe + yoe / 4 - yoe / 100)))
+    mp=$(((5 * doy + 2) / 153)); d=$((doy - (153 * mp + 2) / 5 + 1))
+    if [ $mp -lt 10 ]; then m=$((mp + 3)); else m=$((mp - 9)); fi
+    [ $m -le 2 ] && y=$((y + 1))
+    printf '%d %d %d %d %d %d' $y $m $d $((s / 3600)) $((s % 3600 / 60)) $((s % 60))
+}
+
+iso() { # iso epoch -> 2026-11-24T20:05:00Z
+    local y m d H M S
+    read -r y m d H M S <<< "$(ymdhms "$1")"
+    printf '%04d-%02d-%02dT%02d:%02d:%02dZ' "$y" "$m" "$d" "$H" "$M" "$S"
+}
+
+# days since 1970-01-01 for a civil date (for the certificate expiry date)
+days_from_civil() {
+    local y=$1 m=$2 d=$3 era yoe doy doe mp
+    [ "$m" -le 2 ] && y=$((y - 1))
+    era=$((y / 400)); yoe=$((y - era * 400))
+    if [ "$m" -gt 2 ]; then mp=$((m - 3)); else mp=$((m + 9)); fi
+    doy=$(((153 * mp + 2) / 5 + d - 1)); doe=$((yoe * 365 + yoe / 4 - yoe / 100 + doy))
+    printf '%d' $((era * 146097 + doe - 719468))
+}
+
+xesc() { # XML-escape (sed: in bash 5.2+ "&" in ${s//x/y} means the match)
+    printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's/"/\&quot;/g' -e "s/'/\&apos;/g"
+}
+
+clean() { printf '%s' "$1" | tr -d '\r\n|"\\' | cut -c1-"${2:-60}"; }
+
+new_id() {
+    if [ -r "$TT_PROC/sys/kernel/random/uuid" ]; then cat "$TT_PROC/sys/kernel/random/uuid"
+    else printf '%08x-%04x-4%03x-a%03x-%012x' $RANDOM$RANDOM $RANDOM $((RANDOM % 4096)) $((RANDOM % 4096)) $RANDOM$RANDOM$RANDOM; fi
+}
+
+my_uid() {
+    local mac
+    mac=$(cat "$TT_SYS/class/net/eth0/address" 2>/dev/null)
+    mac=${mac//:/}
+    [ -n "$mac" ] || mac=$(cat "$RUN/uid" 2>/dev/null)
+    [ -n "$mac" ] || { mac=$(new_id | tr -d '-' | cut -c1-12); mkdir -p "$RUN"; printf '%s' "$mac" > "$RUN/uid"; }
+    printf 'TurtleTAK-%s' "${mac: -8}"
+}
+
+log() { printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$RUN/turtletak.log"; }
+
+state_set() { # state_set key value  (RUN/state, read by the menu)
+    local f=$RUN/state
+    touch "$f"
+    grep -v "^$1=" "$f" > "$f.tmp" 2>/dev/null
+    printf '%s=%s\n' "$1" "$2" >> "$f.tmp"
+    mv "$f.tmp" "$f"
+}
+state_get() { sed -n "s/^$1=//p" "$RUN/state" 2>/dev/null | tail -n 1; }
+
+#############################################################################
+# Network facts
+
+lan_if() { # the interface toward the LAN: the default route's, else the last one seen
+    local i
+    i=$(awk '$2 == "00000000" && $8 == "00000000" {print $1; exit}' "$TT_PROC/net/route" 2>/dev/null)
+    if [ -n "$i" ]; then printf '%s' "$i" > "$RUN/lan_if" 2>/dev/null; printf '%s' "$i"; return; fi
+    i=$(cat "$RUN/lan_if" 2>/dev/null)
+    [ -n "$i" ] || i=$(uci -q get network.wan.ifname 2>/dev/null)
+    printf '%s' "${i:-eth1}"
+}
+
+hex_ip() { # little-endian hex from /proc/net/route -> dotted quad
+    local h=$1
+    printf '%d.%d.%d.%d' "0x${h:6:2}" "0x${h:4:2}" "0x${h:2:2}" "0x${h:0:2}"
+}
+
+gateway_ip() {
+    local g
+    g=$(awk '$2 == "00000000" && $3 != "00000000" {print $3; exit}' "$TT_PROC/net/route" 2>/dev/null)
+    [ -n "$g" ] && hex_ip "$g"
+}
+
+my_ip() { # my_ip iface -> "addr/prefix"
+    local a
+    a=$(ip -4 addr show dev "$1" 2>/dev/null | awk '/inet / {print $2; exit}')
+    if [ -z "$a" ]; then
+        a=$(ifconfig "$1" 2>/dev/null | sed -n 's/.*inet addr:\([0-9.]*\).*Mask:\([0-9.]*\).*/\1 \2/p')
+        [ -n "$a" ] && a=$(mask_to_cidr $a)
+    fi
+    printf '%s' "$a"
+}
+
+mask_to_cidr() { # ip mask -> ip/prefix
+    local ip=$1 mask=$2 n=0 o
+    for o in ${mask//./ }; do
+        while [ "$o" -gt 0 ]; do n=$((n + (o & 1))); o=$((o >> 1)); done
+    done
+    printf '%s/%d' "$ip" "$n"
+}
+
+link_up() { [ "$(cat "$TT_SYS/class/net/$1/carrier" 2>/dev/null)" = "1" ]; }
+
+neighbours() { # complete ARP entries on iface: "ip mac"
+    awk -v d="$1" 'NR > 1 && $6 == d && $3 != "0x0" && $4 != "00:00:00:00:00:00" {print $1, tolower($4)}' "$TT_PROC/net/arp" 2>/dev/null
+}
+
+sweep() { # ping every address of the Turtle's /24 (at most) so neighbours show in ARP
+    local cidr ip pre base i pids=()
+    cidr=$(my_ip "$1"); ip=${cidr%/*}; pre=${cidr#*/}
+    [ -n "$ip" ] || return 0
+    base=${ip%.*}
+    [ "${pre:-24}" -lt 24 ] 2>/dev/null || [ "${pre:-24}" -eq 24 ] 2>/dev/null || return 0
+    for ((i = 1; i <= 254; i++)); do
+        [ "$base.$i" = "$ip" ] && continue
+        ping -c 1 -W 1 "$base.$i" >/dev/null 2>&1 &
+        pids+=($!)
+        # wait only for these pings (a plain "wait" would also wait for the TAK connection)
+        [ ${#pids[@]} -ge 24 ] && { wait "${pids[@]}"; pids=(); }
+    done
+    [ ${#pids[@]} -gt 0 ] && wait "${pids[@]}"
+}
+
+uptime_text() {
+    local s d h m
+    s=$(cut -d. -f1 "$TT_PROC/uptime" 2>/dev/null); s=${s:-0}
+    d=$((s / 86400)); h=$((s % 86400 / 3600)); m=$((s % 3600 / 60))
+    if [ $d -gt 0 ]; then printf 'up %dd %dh' $d $h; else printf 'up %dh %dm' $h $m; fi
+}
+
+#############################################################################
+# Alert log on the SD card (LAN Turtle SD)
+
+card_dir() { # where the card is mounted, or nothing
+    local dev mnt
+    while read -r dev mnt _; do
+        case "$dev" in
+            "${TT_DEV:-/dev}"/sd[a-z]*|"${TT_DEV:-/dev}"/mmcblk*)
+                case "$mnt" in /|/rom) continue ;; esac
+                printf '%s' "$mnt"; return 0 ;;
+        esac
+    done < "$TT_PROC/mounts"
+    return 1
+}
+
+card_mount() { # LAN Turtle SD: mount the card's ext2/3/4 (or vfat, if the firmware has it) partition at /sd. Never formats.
+    local dev t
+    card_dir > /dev/null && return 0
+    for dev in "${TT_DEV:-/dev}"/sd[a-z][0-9] "${TT_DEV:-/dev}"/mmcblk[0-9]p[0-9]; do
+        if [ -n "$TT_DEV" ]; then [ -e "$dev" ] || continue; else [ -b "$dev" ] || continue; fi   # TT_DEV: tests
+        t=$(block info "$dev" 2>/dev/null | sed -n 's/.*TYPE="\([^"]*\)".*/\1/p')
+        case "$t" in
+            ext2|ext3|ext4) ;;
+            vfat) grep -qw vfat "$TT_PROC/filesystems" 2>/dev/null || continue ;;
+            *) continue ;;
+        esac
+        mkdir -p "${TT_SD:-/sd}" && mount -t "$t" "$dev" "${TT_SD:-/sd}" 2>/dev/null && { log "mounted the SD card $dev ($t) at ${TT_SD:-/sd}"; return 0; }
+    done
+    return 1
+}
+
+card_log_file() {
+    local d
+    [ "$(cfg card_log 1)" = "1" ] || return 1
+    d=$(card_dir) || return 1
+    mkdir -p "$d/turtletak" 2>/dev/null || return 1
+    printf '%s/turtletak/alerts.log' "$d"
+}
+
+card_log_trim() {
+    local f keep cut y m d
+    f=$(card_log_file) || return 0
+    [ -f "$f" ] || return 0
+    keep=$(cfg card_keep 90)
+    read -r y m d _ <<< "$(ymdhms $(( $(now) - keep * 86400 )))"
+    cut=$(printf '%04d-%02d-%02d' "$y" "$m" "$d")
+    awk -v c="$cut" '$1 >= c' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+}
+
+#############################################################################
+# CoT events (same types and IDs as TurtleTAK Hub Edition)
+
+point_xml() { printf '<point lat="%s" lon="%s" hae="9999999.0" ce="%s" le="9999999.0"/>' "$1" "$2" "${3:-10}"; }
+
+ev_open() { # uid type stale_seconds how [time]
+    local t=${5:-$(now)}
+    printf '<event version="2.0" uid="%s" type="%s" how="%s" time="%s" start="%s" stale="%s">' \
+        "$(xesc "$1")" "$2" "$4" "$(iso "$t")" "$(iso "$t")" "$(iso $((t + $3)))"
+}
+
+status_text() {
+    local i cidr link n
+    i=$(lan_if); cidr=$(my_ip "$i")
+    if link_up "$i"; then link="link up"; else link="link down"; fi
+    n=$(state_get alerts_today); n=${n:-0}
+    printf '%s %s | %s | %s | %s | %s | alerts today %s' "$PRODUCT" "$VERSION" "$(cfg site "Site")" \
+        "$(uptime_text)" "${cidr%/*}" "$link" "$n"
+}
+
+sa_event() {
+    local uid cs iv
+    uid=$(my_uid); cs=$(cfg callsign TURTLE)
+    iv=$(cfg interval 5)
+    printf '%s%s<detail><contact callsign="%s"/><__group name="%s" role="Team Member"/><takv device="LAN Turtle" platform="%s" os="OpenWrt" version="%s"/><precisionlocation geopointsrc="USER" altsrc="???"/><uid Droid="%s"/><remarks>%s</remarks></detail></event>' \
+        "$(ev_open "$uid" "$(cot_type)" $((iv * 60 * 3 + 30)) h-e)" "$(point_xml "$(cfg lat)" "$(cfg lon)")" \
+        "$(xesc "$cs")" "$(xesc "$(team)")" "$PRODUCT" "$VERSION" "$(xesc "$cs")" "$(xesc "$(status_text)")"
+}
+
+alert_type() { case "$1" in CRITICAL) echo a-h-G ;; INFO) echo a-n-G ;; *) echo a-u-G ;; esac; }
+
+marker_event() { # id level title remarks
+    local uid t lat lon
+    uid=$(my_uid); t=$(alert_type "$2")
+    lat=$(awk -v a="$(cfg lat)" 'BEGIN {printf "%.5f", a + 0.00005}')
+    lon=$(awk -v a="$(cfg lon)" 'BEGIN {printf "%.5f", a + 0.00005}')
+    printf '%s%s<detail><contact callsign="%s"/><link uid="%s" production_time="%s" type="%s" parent_callsign="%s" relation="p-p"/><archive/><usericon iconsetpath="COT_MAPPING_2525B/%s/%s"/><remarks>%s</remarks></detail></event>' \
+        "$(ev_open "$uid.alert.$1" "$t" 3600 h-e)" "$(point_xml "$lat" "$lon")" \
+        "$(xesc "$3")" "$uid" "$(iso "$(now)")" "$(cot_type)" "$(xesc "$(cfg callsign TURTLE)")" \
+        "${t:0:3}" "$t" "$(xesc "$4")"
+}
+
+chat_event() { # text -> GeoChat to All Chat Rooms
+    local uid cs mid room="All Chat Rooms"
+    uid=$(my_uid); cs=$(cfg callsign TURTLE); mid=$(new_id)
+    printf '%s%s<detail><__chat parent="RootContactGroup" groupOwner="false" messageId="%s" chatroom="%s" id="%s" senderCallsign="%s"><chatgrp uid0="%s" uid1="%s" id="%s"/></__chat><link uid="%s" type="%s" relation="p-p"/><remarks source="BAO.F.ATAK.%s" to="%s" time="%s">%s</remarks></detail></event>' \
+        "$(ev_open "GeoChat.$uid.$room.$mid" b-t-f 86400 h-g-i-g-o)" "$(point_xml "$(cfg lat)" "$(cfg lon)")" \
+        "$mid" "$room" "$room" "$(xesc "$cs")" "$uid" "$room" "$room" "$uid" "$(cot_type)" "$uid" "$room" \
+        "$(iso "$(now)")" "$(xesc "$1")"
+}
+
+#############################################################################
+# Talking to the TAK server
+#   TCP and TLS: one long-lived connection fed through a FIFO.
+#   UDP: one datagram per event.
+
+# TLS tool: the openssl command (openssl-util) if installed, else ncat (ncat-ssl, in the Hak5 firmware).
+# ncat needs .pem files; openssl also reads .p12.
+has_openssl() { [ -z "$TT_NO_OPENSSL" ] && command -v openssl >/dev/null 2>&1; }
+has_ncat() { [ -z "$TT_NO_NCAT" ] && command -v ncat >/dev/null 2>&1 && ncat --help 2>&1 | grep -q -- --ssl-trustfile; }
+tls_tool() { if has_openssl; then echo openssl; elif has_ncat; then echo ncat; fi; }
+tls_ready() { [ -n "$(tls_tool)" ]; }
+
+tls_prepare() { # unpack the .p12 files into RAM (RUN/tls), never onto flash
+    local cf tf cp tp
+    cf=$(cfg tls_client); tf=$(cfg tls_trust); cp=$(cfg tls_client_pass); tp=$(cfg tls_trust_pass)
+    mkdir -p "$RUN/tls"; chmod 700 "$RUN/tls"
+    [ -n "$cf" ] && [ -n "$tf" ] || { echo "certificates not set"; return 1; }
+    [ -f "$CERTS/$cf" ] || { echo "client certificate $cf not found in $CERTS"; return 1; }
+    [ -f "$CERTS/$tf" ] || { echo "truststore $tf not found in $CERTS"; return 1; }
+    case "$cf$tf" in
+        *.p12*|*.pfx*) has_openssl || { echo ".p12 files need openssl-util: install it (TLS support), or use .pem files"; return 1; } ;;
+    esac
+    case "$cf" in
+        *.p12|*.pfx) openssl pkcs12 -in "$CERTS/$cf" -passin "pass:$cp" -nodes -out "$RUN/tls/client.pem" 2>/dev/null \
+                         || { echo "client certificate: wrong password or file"; return 1; } ;;
+        *) cp "$CERTS/$cf" "$RUN/tls/client.pem" ;;
+    esac
+    case "$tf" in
+        *.p12|*.pfx) openssl pkcs12 -in "$CERTS/$tf" -passin "pass:$tp" -nokeys -out "$RUN/tls/ca.pem" 2>/dev/null \
+                         || { echo "truststore: wrong password or file"; return 1; } ;;
+        *) cp "$CERTS/$tf" "$RUN/tls/ca.pem" ;;
+    esac
+    chmod 600 "$RUN/tls/"*.pem
+    grep -q "ENCRYPTED" "$RUN/tls/client.pem" && { echo "the client .pem key has a password: make it without one (-nodes)"; return 1; }
+    grep -q "PRIVATE KEY" "$RUN/tls/client.pem" || { echo "the client .pem has no private key: it needs the certificate and its key"; return 1; }
+    grep -q "BEGIN CERTIFICATE" "$RUN/tls/client.pem" || { echo "the client .pem has no certificate"; return 1; }
+    grep -q "BEGIN CERTIFICATE" "$RUN/tls/ca.pem" || { echo "the truststore has no CA certificate"; return 1; }
+    return 0
+}
+
+cert_days_left() { # days until the client certificate expires, or nothing
+    local end mon d y ml i m
+    [ -f "$RUN/tls/client.pem" ] || return 1
+    if has_openssl; then
+        end=$(openssl x509 -in "$RUN/tls/client.pem" -noout -enddate 2>/dev/null | sed 's/notAfter=//')
+    else   # Python's own ssl module reads the date (Turtle firmware: python + python-openssl)
+        for py in python python3; do
+            command -v $py >/dev/null 2>&1 || continue
+            end=$($py -c "import ssl,sys; print(ssl._ssl._test_decode_cert(sys.argv[1])['notAfter'])" "$RUN/tls/client.pem" 2>/dev/null) && break
+        done
+    fi
+    read -r mon d _ y _ <<< "$end"
+    [ -n "$y" ] || return 1
+    ml="Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec"; i=1
+    for m in $ml; do [ "$m" = "$mon" ] && break; i=$((i + 1)); done
+    printf '%d' $(( $(days_from_civil "$y" "$i" "$d") - $(now) / 86400 ))
+}
+
+tcp_probe() { # can we open a TCP connection to host:port within 6 s? (skipped if bash has no /dev/tcp)
+    local pp n=0
+    [ -n "$TT_NO_DEVTCP" ] && return 0
+    ( exec 3<> "/dev/tcp/$1/$2" ) 2> "$RUN/probe.err" &
+    pp=$!
+    while kill -0 "$pp" 2>/dev/null; do
+        n=$((n + 1)); [ $n -gt 6 ] && { kill "$pp" 2>/dev/null; echo "no answer from $1:$2" > "$RUN/conn.err"; return 1; }
+        sleep 1
+    done
+    wait "$pp" && return 0
+    grep -q "No such file" "$RUN/probe.err" && { TT_NO_DEVTCP=1; return 0; }
+    cat "$RUN/probe.err" > "$RUN/conn.err"; return 1
+}
+
+conn_open() { # start the connection process reading RUN/tak.fifo
+    local h p proto
+    h=$(cfg host); p=$(cfg port 8087); proto=$(cfg proto tcp)
+    conn_close
+    [ "$proto" = "udp" ] && { state_set tak "ready (UDP)"; return 0; }
+    printf '%s' "$(now)" > "$RUN/conn.try"
+    if ! tcp_probe "$h" "$p"; then
+        state_set tak "can't reach $h:$p ($proto)"; log "can't reach $h:$p: $(head -c 200 "$RUN/conn.err" 2>/dev/null)"; return 1
+    fi
+    rm -f "$RUN/tak.fifo"
+    mkfifo "$RUN/tak.fifo" 2>/dev/null || mknod "$RUN/tak.fifo" p || return 1
+    if [ "$proto" = "tls" ]; then
+        case "$(tls_tool)" in
+            openssl)
+                openssl s_client -quiet -connect "$h:$p" -cert "$RUN/tls/client.pem" -key "$RUN/tls/client.pem" \
+                    -CAfile "$RUN/tls/ca.pem" -verify_return_error < "$RUN/tak.fifo" > /dev/null 2> "$RUN/conn.err" & ;;
+            ncat)
+                # --ssl-verify: the server's certificate must chain to the truststore and match the host name
+                ncat --ssl --ssl-verify --ssl-trustfile "$RUN/tls/ca.pem" --ssl-cert "$RUN/tls/client.pem" \
+                    --ssl-key "$RUN/tls/client.pem" "$h" "$p" < "$RUN/tak.fifo" > /dev/null 2> "$RUN/conn.err" & ;;
+            *) state_set tak "TLS support not installed"; rm -f "$RUN/tak.fifo"; return 1 ;;
+        esac
+    else
+        nc "$h" "$p" < "$RUN/tak.fifo" > /dev/null 2> "$RUN/conn.err" &
+    fi
+    echo $! > "$RUN/conn.pid"
+    { exec 7> "$RUN/tak.fifo"; } 2>/dev/null
+    sleep 3
+    if conn_alive; then
+        state_set tak "connected ($(printf '%s' "$proto" | tr a-z A-Z))"; log "connected to $h:$p $proto"; return 0
+    fi
+    if grep -qi "verif" "$RUN/conn.err" 2>/dev/null; then
+        state_set tak "server certificate check failed: use the server name in its certificate"
+    else
+        state_set tak "can't reach $h:$p ($proto)"
+    fi
+    log "connect failed $h:$p $proto: $(head -c 200 "$RUN/conn.err" 2>/dev/null)"
+    conn_close; return 1
+}
+
+conn_alive() {
+    [ "$(cfg proto tcp)" = "udp" ] && return 0
+    [ -s "$RUN/conn.pid" ] && kill -0 "$(cat "$RUN/conn.pid")" 2>/dev/null
+}
+
+conn_close() {
+    { exec 7>&-; } 2>/dev/null
+    [ -s "$RUN/conn.pid" ] && kill "$(cat "$RUN/conn.pid")" 2>/dev/null
+    rm -f "$RUN/conn.pid" "$RUN/tak.fifo"
+}
+
+udp_send() {
+    local h p
+    h=$(cfg host); p=$(cfg port 8087)
+    { printf '%s' "$1" > "/dev/udp/$h/$p"; } 2>/dev/null && return 0
+    printf '%s' "$1" | nc -u -w 1 "$h" "$p" >/dev/null 2>&1
+}
+
+send() { # send one CoT event; 0 = sent
+    local last
+    if [ "$(cfg proto tcp)" = "udp" ]; then udp_send "$1"; return; fi
+    if ! conn_alive; then
+        last=$(cat "$RUN/conn.try" 2>/dev/null)
+        [ $(( $(now) - ${last:-0} )) -ge 30 ] || return 1   # retry at most every 30 s
+        conn_open || return 1
+    fi
+    { printf '%s' "$1" >&7; } 2>/dev/null && return 0
+    conn_close; return 1
+}
+
+#############################################################################
+# Alerts
+
+alert() { # alert LEVEL kind text
+    local level=$1 kind=$2 text=$3 t id n f
+    t=$(now)
+    n=$(state_get alerts_today); [ "$(state_get alerts_day)" = "$(date +%j)" ] || n=0
+    state_set alerts_day "$(date +%j)"; state_set alerts_today $((n + 1))
+    log "ALERT $level $kind: $text"
+    if f=$(card_log_file); then
+        printf '%s  %-8s %-15s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$level" "$kind" "$text" >> "$f"
+    fi
+    id=$(printf '%04d' $(( $(cat "$RUN/alert_seq" 2>/dev/null || echo 0) + 1 )))
+    printf '%s' "$((10#$id))" > "$RUN/alert_seq"
+    queue_add "$t|$id|$level|$kind|$text"
+    flush_queue
+}
+
+queue_add() {
+    printf '%s\n' "$1" >> "$RUN/queue"
+    tail -n 50 "$RUN/queue" > "$RUN/queue.tmp" && mv "$RUN/queue.tmp" "$RUN/queue"
+}
+
+quiet_now() {
+    local q1 q2 hm
+    q1=$(cfg quiet_from ""); q2=$(cfg quiet_to "")
+    [ -n "$q1" ] && [ -n "$q2" ] || return 1
+    hm=$(date +%H%M); q1=${q1/:/}; q2=${q2/:/}
+    hm=$((10#$hm)); q1=$((10#$q1)); q2=$((10#$q2))
+    if [ $q1 -le $q2 ]; then [ $hm -ge $q1 ] && [ $hm -lt $q2 ]
+    else [ $hm -ge $q1 ] || [ $hm -lt $q2 ]; fi
+}
+
+flush_queue() { # send queued alerts (kept while the TAK server or the link is down)
+    local t id level kind text when late site
+    [ -s "$RUN/queue" ] || return 0
+    site=$(cfg site "")
+    cp "$RUN/queue" "$RUN/queue.work"
+    while IFS='|' read -r t id level kind text; do
+        [ -n "$t" ] || continue
+        late=""
+        [ $(( $(now) - t )) -gt 120 ] && late=" (at $(date -d "@$t" +%H:%M 2>/dev/null || iso "$t"))"
+        when="$text$late"
+        send "$(marker_event "$id" "$level" "$(cfg callsign TURTLE) $kind" "$when")" || break
+        # sent: off the queue right away, so a stop now can't send it twice
+        grep -v "^$t|$id|" "$RUN/queue" > "$RUN/queue.tmp"; mv "$RUN/queue.tmp" "$RUN/queue"
+        if [ "$(cfg chat 1)" = "1" ] && ! quiet_now; then
+            send "$(chat_event "[$level] ${site:+$site: }$when")"
+        fi
+    done < "$RUN/queue.work"
+    rm -f "$RUN/queue.work"
+}
+
+#############################################################################
+# Network watch
+
+name_of() { # MAC -> name given in the menu, or nothing
+    cfg_list name | awk -F'|' -v m="$1" 'tolower($1) == m {print $2; exit}'
+}
+
+watched() { cfg_list watch | grep -qi "^$1$"; }
+
+label() { # "name ip" or "ip mac"
+    local n
+    n=$(name_of "$2")
+    if [ -n "$n" ]; then printf '%s (%s)' "$n" "$1"; else printf '%s %s' "$1" "$2"; fi
+}
+
+watch_check() { # one pass: neighbours, new / missing / back devices, gateway MAC
+    local i t ip mac gw gmac old last miss
+    i=$(lan_if); t=$(now)
+    touch "$RUN/known" "$RUN/seen" "$RUN/missing"
+    neighbours "$i" > "$RUN/nb"
+    while read -r ip mac; do
+        [ -n "$mac" ] || continue
+        grep -v "^$mac " "$RUN/seen" > "$RUN/seen.tmp"; printf '%s %s %s\n' "$mac" "$t" "$ip" >> "$RUN/seen.tmp"
+        mv "$RUN/seen.tmp" "$RUN/seen"
+        if ! grep -q "^$mac$" "$RUN/known"; then
+            echo "$mac" >> "$RUN/known"
+            if [ -f "$RUN/learned" ] && [ "$(cfg a_new 1)" = "1" ] && ! watched "$mac" && [ -z "$(name_of "$mac")" ]; then
+                alert WARNING "new device" "$ip $mac"
+            fi
+        fi
+        if grep -q "^$mac$" "$RUN/missing"; then
+            grep -v "^$mac$" "$RUN/missing" > "$RUN/missing.tmp"; mv "$RUN/missing.tmp" "$RUN/missing"
+            [ "$(cfg a_watch 1)" = "1" ] && alert INFO "back" "$(label "$ip" "$mac") is back"
+        fi
+    done < "$RUN/nb"
+    # watched devices not seen for a while
+    miss=$(( $(cfg miss_min 10) * MIN ))
+    for mac in $(cfg_list watch | tr 'A-F' 'a-f'); do
+        grep -q "^$mac$" "$RUN/missing" && continue
+        last=$(awk -v m="$mac" '$1 == m {print $2}' "$RUN/seen")
+        if [ -z "$last" ]; then last=$(state_get started); fi
+        if [ $((t - ${last:-$t})) -ge "$miss" ]; then
+            echo "$mac" >> "$RUN/missing"
+            ip=$(awk -v m="$mac" '$1 == m {print $3}' "$RUN/seen")
+            [ "$(cfg a_watch 1)" = "1" ] && alert WARNING "missing" "watched device $(label "${ip:-?}" "$mac") missing for $(cfg miss_min 10) min"
+        fi
+    done
+    # ARP spoofing: the gateway's IP claimed by another MAC
+    gw=$(gateway_ip)
+    if [ -n "$gw" ]; then
+        gmac=$(awk -v g="$gw" '$1 == g {print $2}' "$RUN/nb")
+        if [ -z "$gmac" ]; then ping -c 1 -W 1 "$gw" >/dev/null 2>&1; gmac=$(neighbours "$i" | awk -v g="$gw" '$1 == g {print $2}'); fi
+        # RUN/gwmac: the gateway's real MAC (first one seen); RUN/gwcur: the one seen last time
+        old=$(cat "$RUN/gwmac" 2>/dev/null)
+        [ "${old%% *}" = "$gw" ] || old=""
+        if [ -n "$gmac" ]; then
+            if [ -z "$old" ]; then
+                printf '%s %s' "$gw" "$gmac" > "$RUN/gwmac"
+            else
+                last=$(cat "$RUN/gwcur" 2>/dev/null); last=${last:-${old#* }}
+                if [ "$gmac" != "$last" ] && [ "$(cfg a_arp 1)" = "1" ]; then
+                    if [ "$gmac" = "${old#* }" ]; then
+                        alert INFO "gateway ok" "gateway $gw is back to its own MAC ${old#* }"
+                    else
+                        alert CRITICAL "arp spoofing" "gateway $gw now claimed by $gmac (was ${old#* })"
+                    fi
+                fi
+            fi
+            printf '%s' "$gmac" > "$RUN/gwcur"
+        fi
+    fi
+    touch "$RUN/learned"
+}
+
+link_check() {
+    local i now_up was
+    i=$(lan_if)
+    if link_up "$i"; then now_up=1; else now_up=0; fi
+    was=$(state_get link)
+    state_set link "$now_up"
+    [ -n "$was" ] && [ "$was" != "$now_up" ] && [ "$(cfg a_link 1)" = "1" ] || return 0
+    if [ "$now_up" = "1" ]; then alert INFO "link up" "$i Ethernet link is back up"
+    else alert CRITICAL "link down" "$i Ethernet link is down"; fi
+}
+
+#############################################################################
+# The background service
+
+service() {
+    local t last_sa=0 last_watch=0 last_sweep=0 last_trim=0 last_cert=0 iv days
+    trap 'conn_close; exit 0' TERM INT
+    trap '' HUP PIPE
+    state_set started "$(now)"; state_set tak "starting"
+    card_mount
+    rm -f "$RUN/learned" "$RUN/known" "$RUN/seen" "$RUN/missing"
+    rm -f "$RUN/conn.try"
+    log "$PRODUCT $VERSION started ($(cfg host):$(cfg port 8087) $(cfg proto tcp))"
+    [ "$(cfg proto tcp)" = "udp" ] && state_set tak "ready (UDP)"
+    if [ "$(cfg proto tcp)" = "tls" ]; then
+        if ! tls_ready; then state_set tak "TLS support not installed"; log "TLS support not installed"
+        elif ! msg=$(tls_prepare); then state_set tak "TLS: $msg"; log "TLS: $msg"; fi
+    fi
+    while :; do
+        t=$(now); iv=$(( $(cfg interval 5) * MIN ))
+        link_check
+        if [ $((t - last_sweep)) -ge $(( $(cfg sweep_min 5) * MIN )) ]; then sweep "$(lan_if)"; last_sweep=$t; fi
+        if [ $((t - last_watch)) -ge "$MIN" ]; then watch_check; last_watch=$t; fi
+        if [ $((t - last_sa)) -ge "$iv" ]; then
+            if send "$(sa_event)"; then last_sa=$t; state_set last_report "$t"; fi
+        fi
+        flush_queue
+        if [ $((t - last_trim)) -ge 86400 ]; then card_log_trim; last_trim=$t; fi
+        if [ "$(cfg proto tcp)" = "tls" ] && [ $((t - last_cert)) -ge 86400 ] && days=$(cert_days_left); then
+            last_cert=$t; state_set cert_days "$days"
+            [ "$days" -le 30 ] && alert WARNING "certificate" "TAK client certificate expires in $days days"
+        fi
+        sleep "$TICK"
+    done
+}
+
+#############################################################################
+# Turtle module functions
+
+function start {
+    mkdir -p "$RUN"
+    cfg_init
+    if [ "$(status)" = "1" ]; then echo "TurtleTAK is already running"; return 0; fi
+    if ! configured; then echo "TurtleTAK is not configured: Modules > turtletak > Configure"; return 1; fi
+    ( service ) < /dev/null >> "$RUN/turtletak.log" 2>&1 &
+    echo $! > "$PIDF"
+    echo "TurtleTAK started: $(cfg callsign TURTLE) to $(cfg host):$(cfg port 8087) $(cfg proto tcp)"
+}
+
+function stop {
+    local p
+    if [ -s "$PIDF" ]; then
+        p=$(cat "$PIDF")
+        kill "$p" 2>/dev/null
+        sleep 1
+        kill -9 "$p" 2>/dev/null
+    fi
+    [ -s "$RUN/conn.pid" ] && kill "$(cat "$RUN/conn.pid")" 2>/dev/null
+    rm -f "$PIDF" "$RUN/conn.pid" "$RUN/tak.fifo"
+    state_set tak "stopped" 2>/dev/null
+    echo "TurtleTAK stopped"
+}
+
+function status {
+    if [ -s "$PIDF" ] && kill -0 "$(cat "$PIDF")" 2>/dev/null; then echo "1"; else echo "0"; fi
+}
+
+restart_if_running() {
+    if [ "$(status)" = "1" ]; then stop > /dev/null; start > /dev/null; fi
+}
+
+#############################################################################
+# Configure menus
+
+menu_server() {
+    local proto r
+    proto=$(cfg proto tcp)
+    dialog --ok-label "Submit" --title "TAK server" \
+        --form "Where this Turtle sends its marker and alerts.\n\nTCP 8087 and UDP 8087 are the usual plain ports.\nTLS (usually 8089) needs TLS support (menu 5)." 14 60 2 \
+        "Host:" 1 1 "$(cfg host)" 1 12 40 0 \
+        "Port:" 2 1 "$(cfg port 8087)" 2 12 6 0 2> "$CONF" || return
+    { read -r h; read -r p; } < "$CONF"
+    h=$(clean "$h" 100); p=$(clean "$p" 5)
+    dialog --title "TAK server" --radiolist "Protocol" 12 50 3 \
+        tcp "TCP (plain)" "$([ "$proto" = tcp ] && echo on || echo off)" \
+        udp "UDP (plain)" "$([ "$proto" = udp ] && echo on || echo off)" \
+        tls "TLS (needs TLS support)" "$([ "$proto" = tls ] && echo on || echo off)" 2> "$CONF" || return
+    r=$(cat "$CONF")
+    case "$p" in ''|*[!0-9]*) dialog --msgbox "Port must be a number" 6 40; return ;; esac
+    cfg_set host "$h"; cfg_set port "$p"; cfg_set proto "${r:-tcp}"; cfg_commit
+    if [ "$r" = "tls" ] && ! tls_ready; then
+        dialog --title "TLS" --msgbox "TLS is selected, but TLS support is not installed yet.\nUse menu 5 to install it and add your certificates." 8 60
+    fi
+}
+
+valid_coord() { awk -v v="$1" -v lim="$2" 'BEGIN { exit !(v ~ /^-?[0-9]+(\.[0-9]+)?$/ && v >= -lim && v <= lim) }'; }
+
+menu_place() {
+    local cs site lat lon iv
+    dialog --ok-label "Submit" --title "Callsign and place" \
+        --form "The Turtle has no GPS: enter where it is.\nTip: long-press the spot in ATAK and copy its coordinates." 15 60 5 \
+        "Callsign:" 1 1 "$(cfg callsign)" 1 21 24 0 \
+        "Site name:" 2 1 "$(cfg site)" 2 21 24 0 \
+        "Latitude:" 3 1 "$(cfg lat)" 3 21 12 0 \
+        "Longitude:" 4 1 "$(cfg lon)" 4 21 12 0 \
+        "Report every (min):" 5 1 "$(cfg interval 5)" 5 21 4 0 2> "$CONF" || return
+    { read -r cs; read -r site; read -r lat; read -r lon; read -r iv; } < "$CONF"
+    if ! valid_coord "$lat" 90 || ! valid_coord "$lon" 180; then
+        dialog --msgbox "Latitude must be -90 to 90 and longitude -180 to 180, as decimal degrees (for example 39.09970 and -94.57860)." 8 60; return
+    fi
+    case "$iv" in ''|*[!0-9]*|0) iv=5 ;; esac
+    cfg_set callsign "$(clean "$cs" 24)"; cfg_set site "$(clean "$site" 24)"
+    cfg_set lat "$lat"; cfg_set lon "$lon"; cfg_set interval "$iv"; cfg_commit
+    menu_marker
+}
+
+menu_marker() {
+    local cur sel t c items=()
+    cur=$(cot_type)
+    case "$cur" in a-f-G-E-S) sel=sensor ;; a-f-G-I) sel=facility ;; a-f-G-U-C) sel=team ;; *) sel=custom ;; esac
+    dialog --title "Marker type" --radiolist "How ATAK shows this Turtle. Alert markers keep their own red / yellow / green." 14 72 4 \
+        sensor "Sensor (a-f-G-E-S), like the Hub Edition" "$([ $sel = sensor ] && echo on || echo off)" \
+        facility "Facility (a-f-G-I), a building or site" "$([ $sel = facility ] && echo on || echo off)" \
+        team "Team member (a-f-G-U-C), a dot in a team color" "$([ $sel = team ] && echo on || echo off)" \
+        custom "Custom CoT type" "$([ $sel = custom ] && echo on || echo off)" 2> "$CONF" || return
+    case "$(cat "$CONF")" in
+        sensor) t="a-f-G-E-S" ;; facility) t="a-f-G-I" ;; team) t="a-f-G-U-C" ;;
+        custom)
+            dialog --inputbox "CoT type, for example a-n-G-E-S (neutral sensor).\nIt must start with a- and look like a-f-G-E-S." 10 60 "$cur" 2> "$CONF" || return
+            t=$(clean "$(cat "$CONF")" 40 | tr -d ' ')
+            if ! valid_type "$t"; then dialog --msgbox "\"$t\" isn't a CoT type like a-f-G-E-S. Kept $cur." 7 60; return; fi ;;
+        *) return ;;
+    esac
+    cfg_set cot_type "$t"
+    if [ "$t" = a-f-G-U-C ]; then
+        for c in $TEAM_COLORS; do items+=("$c" "" "$([ "$c" = "$(cfg team Cyan)" ] && echo on || echo off)"); done
+        dialog --title "Team color" --radiolist "Color of the Turtle's dot in ATAK" 22 40 14 "${items[@]}" 2> "$CONF" && {
+            c=$(cat "$CONF"); [ -n "$c" ] && cfg_set team "$c"; }
+    fi
+    cfg_commit
+}
+
+onoff() { [ "$(cfg "$1" 1)" = "1" ] && echo on || echo off; }
+
+menu_alerts() {
+    local sel k q1 q2
+    local keys=(a_new a_watch a_link a_arp chat) i
+    dialog --separate-output --title "Network alerts" --checklist "Space turns an alert on or off." 15 60 5 \
+        1 "New device on the LAN" "$(onoff a_new)" \
+        2 "Watched device missing / back" "$(onoff a_watch)" \
+        3 "Ethernet link down / back up" "$(onoff a_link)" \
+        4 "ARP spoofing (gateway IP claimed)" "$(onoff a_arp)" \
+        5 "Also send as GeoChat (All Chat Rooms)" "$(onoff chat)" 2> "$CONF" || return
+    sel=$(cat "$CONF")
+    for i in 1 2 3 4 5; do
+        k=${keys[$((i - 1))]}
+        if printf '%s\n' "$sel" | grep -qx "$i"; then cfg_set "$k" 1; else cfg_set "$k" 0; fi
+    done
+    dialog --ok-label "Submit" --title "Quiet hours" \
+        --form "No GeoChat between these times (markers still go to the map).\nLeave both empty for no quiet hours. Use HH:MM." 11 60 2 \
+        "From:" 1 1 "$(cfg quiet_from)" 1 8 6 0 \
+        "To:" 2 1 "$(cfg quiet_to)" 2 8 6 0 2> "$CONF" || { cfg_commit; return; }
+    { read -r q1; read -r q2; } < "$CONF"
+    for q in "$q1" "$q2"; do
+        case "$q" in ''|[0-2][0-9]:[0-5][0-9]) ;; *) dialog --msgbox "Use HH:MM, for example 22:00" 6 40; cfg_commit; return ;; esac
+    done
+    cfg_set quiet_from "$q1"; cfg_set quiet_to "$q2"; cfg_commit
+}
+
+menu_watch() {
+    local i items=() ip mac n st sel m newname
+    i=$(lan_if)
+    dialog --infobox "Looking for devices on the LAN ($i)..." 5 50
+    mkdir -p "$RUN"; sweep "$i"
+    { neighbours "$i"; for m in $(cfg_list watch | tr 'A-F' 'a-f'); do neighbours "$i" | grep -q " $m$" || echo "- $m"; done; } > "$RUN/nb.menu"
+    while read -r ip mac; do
+        n=$(name_of "$mac")
+        if watched "$mac"; then st=on; else st=off; fi
+        items+=("$mac" "$(printf '%-15s %s' "$ip" "$n")" "$st")
+    done < "$RUN/nb.menu"
+    if [ ${#items[@]} -eq 0 ]; then dialog --msgbox "No devices found on $i yet." 6 50; return; fi
+    dialog --separate-output --extra-button --extra-label "Rename" --title "Watched devices" \
+        --checklist "Devices seen on this LAN now. Tick the ones that should always be here." 20 70 12 "${items[@]}" 2> "$CONF"
+    case $? in
+        "$DIALOG_OK")
+            uci -q delete turtletak.main.watch
+            while read -r m; do [ -n "$m" ] && uci -q add_list "turtletak.main.watch=$m"; done < "$CONF"
+            dialog --inputbox "Missing after (minutes)" 8 40 "$(cfg miss_min 10)" 2> "$CONF" && {
+                n=$(cat "$CONF"); case "$n" in ''|*[!0-9]*|0) ;; *) cfg_set miss_min "$n" ;; esac; }
+            cfg_commit ;;
+        "$DIALOG_EXTRA")
+            m=$(head -n 1 "$CONF")
+            [ -n "$m" ] || { dialog --msgbox "Highlight a device, then Rename." 6 40; menu_watch; return; }
+            dialog --inputbox "Name for $m" 8 50 "$(name_of "$m")" 2> "$CONF" || { menu_watch; return; }
+            newname=$(clean "$(cat "$CONF")" 24 | tr ' ' '-')
+            cfg_list name | grep -vi "^$m|" > "$RUN/names"
+            uci -q delete turtletak.main.name
+            while read -r n; do [ -n "$n" ] && uci -q add_list "turtletak.main.name=$n"; done < "$RUN/names"
+            [ -n "$newname" ] && uci -q add_list "turtletak.main.name=$m|$newname"
+            cfg_commit; menu_watch ;;
+    esac
+}
+
+menu_tls() {
+    local free need cf tf cp tp msg days ask r install
+    if ! has_openssl; then
+        free=$(df -k /overlay 2>/dev/null | awk 'NR == 2 {print $4}')
+        # the firmware may already have the OpenSSL library: then only the small openssl command is needed
+        if opkg list-installed 2>/dev/null | grep -q '^libopenssl'; then need=350; else need=1300; fi
+        if has_ncat; then
+            ask="This Turtle can already do TLS with ncat, using .pem files (no install).\n\nTo use .p12 files instead, install openssl-util from the OpenWrt package server (the Turtle needs internet, once).\n\n  Free flash now:  $(awk -v k="${free:-0}" 'BEGIN {printf "%.1f MB", k / 1024}')\n  Needs about:     $(awk -v k="$need" 'BEGIN {printf "%.1f MB", k / 1024}')"
+            dialog --title "TLS support" --yes-label "Use .pem" --no-label "Install" --yesno "$ask" 16 64
+            r=$?
+            [ "$r" -eq "$DIALOG_ESC" ] && return
+            if [ "$r" -eq 0 ]; then install=0; else install=1; fi
+        else
+            ask="TLS needs openssl-util from the OpenWrt package server. The Turtle needs internet for this, once.\n\n  Free flash now:  $(awk -v k="${free:-0}" 'BEGIN {printf "%.1f MB", k / 1024}')\n  Needs about:     $(awk -v k="$need" 'BEGIN {printf "%.1f MB", k / 1024}')\n\nInstall it now?"
+            dialog --title "TLS support" --yes-label "Install" --no-label "Not now" --yesno "$ask" 13 62 || return
+            install=1
+        fi
+        if [ "$install" = 1 ]; then
+            if [ "${free:-0}" -lt "$need" ]; then
+                dialog --msgbox "Not enough free flash: $(awk -v k="${free:-0}" 'BEGIN {printf "%.1f", k / 1024}') MB free, about $(awk -v k="$need" 'BEGIN {printf "%.1f", k / 1024}') MB needed.$( has_ncat && printf '\n\nUse .pem files with ncat instead (no install).')" 9 64
+                has_ncat || return
+            else
+                clear; echo "Installing openssl-util..."
+                if opkg update && opkg install openssl-util; then echo; echo "Done."
+                else echo; echo "Install failed: check the Turtle's internet connection and free space (df -h)."; fi
+                echo "Press Enter to continue"; read -r _
+            fi
+        fi
+        tls_ready || return
+    fi
+    mkdir -p "$CERTS"
+    dialog --ok-label "Submit" --insecure --title "TLS certificates" \
+        --mixedform "Copy the files to $CERTS/ (scp or WinSCP).\n$(has_openssl && echo ".p12 files (as for ATAK) with their passwords, or .pem files." || echo ".pem files: client cert + key without a password, and the CA. Leave passwords empty.")" 15 68 4 \
+        "Client cert:" 1 1 "$(cfg tls_client)" 1 23 36 0 0 \
+        "Client password:" 2 1 "$(cfg tls_client_pass)" 2 23 36 0 1 \
+        "Truststore:" 3 1 "$(cfg tls_trust)" 3 23 36 0 0 \
+        "Truststore password:" 4 1 "$(cfg tls_trust_pass)" 4 23 36 0 1 2> "$CONF" || return
+    { read -r cf; read -r cp; read -r tf; read -r tp; } < "$CONF"
+    cfg_set tls_client "$(basename "$cf")"; cfg_set tls_client_pass "$cp"
+    cfg_set tls_trust "$(basename "$tf")"; cfg_set tls_trust_pass "$tp"; cfg_commit
+    mkdir -p "$RUN"
+    if msg=$(tls_prepare); then
+        days=$(cert_days_left)
+        dialog --title "TLS certificates" --msgbox "Certificates read OK.\n\nClient certificate valid for ${days:-?} more days." 9 55
+    else
+        dialog --title "TLS certificates" --msgbox "Problem: $msg" 7 55
+    fi
+}
+
+menu_card() {
+    local d sel k
+    if ! d=$(card_dir); then
+        dialog --msgbox "No SD card found. This item is for the LAN Turtle SD with an ext4 card." 7 60; return
+    fi
+    dialog --title "Alert log" --radiolist "SD card found at $d.\nFile: turtletak/alerts.log on the card." 12 60 2 \
+        on "Keep the alert log on the card" "$([ "$(cfg card_log 1)" = 1 ] && echo on || echo off)" \
+        off "Off" "$([ "$(cfg card_log 1)" = 1 ] && echo off || echo on)" 2> "$CONF" || return
+    sel=$(cat "$CONF")
+    if [ "$sel" = "on" ]; then cfg_set card_log 1; else cfg_set card_log 0; fi
+    dialog --inputbox "Keep alerts for how many days?" 8 40 "$(cfg card_keep 90)" 2> "$CONF" && {
+        k=$(cat "$CONF"); case "$k" in ''|*[!0-9]*|0) ;; *) cfg_set card_keep "$k" ;; esac; }
+    cfg_commit
+}
+
+menu_test() {
+    local was msg
+    msg="Test from $(cfg callsign TURTLE): TurtleTAK Classic $VERSION is talking to TAK"
+    configured || { dialog --msgbox "Set the TAK server (1) and callsign / place (2) first." 6 60; return; }
+    mkdir -p "$RUN"
+    was=$(status)
+    [ "$was" = "1" ] && stop > /dev/null
+    [ "$(cfg proto tcp)" = "tls" ] && { tls_prepare > /dev/null || { dialog --msgbox "TLS certificates are not ready (menu 5)." 6 50; return; }; }
+    dialog --infobox "Sending a marker and a GeoChat test..." 5 50
+    rm -f "$RUN/conn.try"
+    if send "$(sa_event)" && send "$(chat_event "$msg")"; then
+        sleep 1
+        conn_close
+        dialog --msgbox "Sent. Check the TAK map for $(cfg callsign TURTLE) and All Chat Rooms for the test message." 7 60
+    else
+        conn_close
+        dialog --msgbox "Could not reach $(cfg host):$(cfg port 8087) ($(cfg proto tcp)).\n$(head -c 150 "$RUN/conn.err" 2>/dev/null)" 9 60
+    fi
+    [ "$was" = "1" ] && start > /dev/null
+}
+
+menu_help() {
+    dialog --title "TurtleTAK Classic $VERSION" --msgbox "\
+Puts this Turtle on the TAK map and sends network alerts as markers and GeoChat.\n\n\
+1 TAK server: host, port, TCP / UDP / TLS\n\
+2 Callsign and place: where it is (no GPS), report interval, marker type\n\
+3 Network alerts: new device, watched device, link, ARP spoofing\n\
+4 Watched devices: tick the ones that must stay; Rename names them\n\
+5 TLS support: .pem files with ncat, or .p12 with openssl-util\n\
+6 Alert log on the card (LAN Turtle SD)\n\
+7 Send a test marker and GeoChat\n\n\
+Start runs it now; Enable starts it at boot.\n\
+Log: $RUN/turtletak.log\n\
+github.com/SECT0101/TurtleTAK-Classic" 20 72
+}
+
+alerts_summary() { # "4 of 4 on, quiet 22:00-06:00"
+    local k n=0
+    for k in a_new a_watch a_link a_arp; do [ "$(cfg "$k" 1)" = "1" ] && n=$((n + 1)); done
+    if [ -n "$(cfg quiet_from)" ]; then printf '%d of 4 on, quiet %s-%s' $n "$(cfg quiet_from)" "$(cfg quiet_to)"
+    else printf '%d of 4 on, no quiet hours' $n; fi
+}
+
+function configure {
+    local r running tak al
+    mkdir -p "$RUN"
+    cfg_init
+    card_mount
+    while :; do
+        if [ "$(status)" = "1" ]; then running=yes; tak=$(state_get tak); else running=no; tak="-"; fi
+        al=$(state_get alerts_today); [ "$(state_get alerts_day)" = "$(date +%j)" ] || al=0
+        local items=(
+            1 "TAK server          $(cfg host "(not set)"):$(cfg port 8087) $(cfg proto tcp | tr a-z A-Z)"
+            2 "Callsign / place    $(cfg callsign "(not set)"), $(cfg site "-"), $(type_label "$(cot_type)")"
+            3 "Network alerts      $(alerts_summary)"
+            4 "Watched devices     $(cfg_list watch | grep -c .) watched"
+            5 "TLS support         $(case "$(tls_tool)" in openssl) echo "openssl (.p12 / .pem)" ;; ncat) echo "ncat (.pem files)" ;; *) echo "not installed" ;; esac)")
+        card_dir > /dev/null && items+=(6 "Alert log on card   $([ "$(cfg card_log 1)" = 1 ] && echo on || echo off)")
+        items+=(7 "Send test to TAK" 8 "Help")
+        dialog --no-collapse --title "TurtleTAK Classic $VERSION" --cancel-label "Done" \
+            --menu "Running: $running   TAK: ${tak:--}   Alerts today: ${al:-0}" 18 66 8 "${items[@]}" 2> "$CONF"
+        [ $? -eq "$DIALOG_OK" ] || break
+        r=$(cat "$CONF")
+        case "$r" in
+            1) menu_server ;; 2) menu_place ;; 3) menu_alerts ;; 4) menu_watch ;;
+            5) menu_tls ;; 6) menu_card ;; 7) menu_test ;; 8) menu_help ;;
+        esac
+    done
+    rm -f "$CONF"
+    restart_if_running
+    clear
+}
