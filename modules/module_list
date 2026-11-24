@@ -21,6 +21,7 @@ script2http Post script output via HTTP
 sshfs Mounts remote File Systems over SSH
 stunnel pass a unsecure protocol through a SSL connection
 tortle TOR Turtle Gateway TOR hidden SHELL Service
+turtletak TAK sensor with network watch alerts (TurtleTAK Classic)
 upnp-portfwd uPnP Port Forwarding
 uptime System Uptime
 urlsnarf Sniffs HTTP URL traffic
